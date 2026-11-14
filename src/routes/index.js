@@ -6,6 +6,8 @@
 const express = require('express');
 const healthRoutes = require('./health.routes');
 const productRoutes = require('./product.routes');
+const orderRoutes = require('./order.routes');
+const adminRoutes = require('./admin.routes');
 
 const router = express.Router();
 
@@ -14,6 +16,12 @@ router.use('/health', healthRoutes);
 
 // Mount Products under /api/v1/products
 router.use('/products', productRoutes);
+
+// Mount Orders under /api/v1/orders
+router.use('/orders', orderRoutes);
+
+// Mount Admin under /api/v1/admin
+router.use('/admin', adminRoutes);
 
 // Welcome endpoint for root API check
 router.get('/', (req, res) => {
@@ -27,4 +35,3 @@ router.get('/', (req, res) => {
 });
 
 module.exports = router;
-

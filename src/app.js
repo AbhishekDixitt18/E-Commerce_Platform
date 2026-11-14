@@ -13,6 +13,8 @@ const apiRoutes = require('./routes');
 const healthRoutes = require('./routes/health.routes');
 const healthController = require('./controllers/health.controller');
 const productRoutes = require('./routes/product.routes');
+const orderRoutes = require('./routes/order.routes');
+const adminRoutes = require('./routes/admin.routes');
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -39,8 +41,10 @@ if (config.isDevelopment) {
 app.use('/health', healthRoutes);
 app.get('/ready', (req, res, next) => healthController.getReadiness(req, res, next));
 
-// API product endpoints direct alias (/api/products)
+// Direct API route aliases (/api/products, /api/orders, /api/admin)
 app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Versioned API endpoints (/api/v1)
 app.use(config.server.apiPrefix, apiRoutes);

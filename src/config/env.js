@@ -21,6 +21,7 @@ const config = {
     port: parseInt(process.env.PORT, 10) || 3000,
     apiPrefix: process.env.API_PREFIX || '/api/v1',
     corsOrigin: process.env.CORS_ORIGIN || '*',
+    adminApiKey: process.env.ADMIN_API_KEY || 'algions-devops-admin-key-2026',
   },
 
   db: {

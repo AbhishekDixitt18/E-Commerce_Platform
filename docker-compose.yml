@@ -46,6 +46,7 @@ services:
       DB_SSL: "false"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-algions-devops-admin-key-2026}
     ports:
       - "3001:3000"
     depends_on:

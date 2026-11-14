@@ -29,7 +29,7 @@ class ApiError extends Error {
   }
 
   static unauthorized(message = 'Unauthorized') {
-    return new ApiError(413, message);
+    return new ApiError(401, message);
   }
 
   static forbidden(message = 'Forbidden') {

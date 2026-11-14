@@ -1,28 +1,88 @@
 /**
  * Product Controller
- * Handles catalog and product queries from the database.
+ * HTTP handlers for catalog listing, search, single product details, creation, and stock updates.
  */
 
-const { query } = require('../config/database');
+const productService = require('../services/product.service');
 const { successResponse } = require('../utils/response');
 
 class ProductController {
   /**
-   * List all products in the catalog
+   * List all products with search, filtering, and pagination
    */
   async getProducts(req, res, next) {
     try {
-      const result = await query(
-        'SELECT id, sku, name, description, price, currency, inventory_count, category, status, created_at, updated_at FROM products ORDER BY created_at ASC'
-      );
+      const result = await productService.getProducts(req.query);
 
       return successResponse(res, {
         statusCode: 200,
         message: 'Products retrieved successfully',
-        data: result.rows,
+        data: result.products,
         meta: {
-          count: result.rowCount,
+          total: result.total,
+          limit: result.limit,
+          offset: result.offset,
         },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Retrieve product details by ID
+   */
+  async getProductById(req, res, next) {
+    try {
+      const product = await productService.getProductById(req.params.id);
+
+      return successResponse(res, {
+        statusCode: 200,
+        message: 'Product retrieved successfully',
+        data: product,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Create a new product (Admin)
+   */
+  async createProduct(req, res, next) {
+    try {
+      const product = await productService.createProduct(
+        req.body,
+        req.ip,
+        req.headers['user-agent']
+      );
+
+      return successResponse(res, {
+        statusCode: 201,
+        message: 'Product created successfully',
+        data: product,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Update product inventory stock (Admin)
+   */
+  async updateStock(req, res, next) {
+    try {
+      const updatedProduct = await productService.updateStock(
+        req.params.id,
+        req.body,
+        req.ip,
+        req.headers['user-agent']
+      );
+
+      return successResponse(res, {
+        statusCode: 200,
+        message: 'Product stock updated successfully',
+        data: updatedProduct,
       });
     } catch (error) {
       return next(error);

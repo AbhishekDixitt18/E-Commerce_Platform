@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED')),
     shipping_address TEXT NOT NULL,
+    idempotency_key VARCHAR(255) UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -78,6 +79,7 @@ CREATE TRIGGER trigger_orders_updated_at
 CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number);
 CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_idempotency_key ON orders(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 
 -- =============================================================================
