@@ -18,7 +18,7 @@ FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=3000
 
 # Install dumb-init for proper PID 1 signal forwarding
 RUN apk add --no-cache dumb-init
@@ -36,12 +36,12 @@ COPY scripts/ ./scripts/
 USER node
 
 # Expose internal service port
-EXPOSE 5000
+EXPOSE 3000
 
 # Container liveness health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "const http = require('http'); \
-    const req = http.request({ host: '127.0.0.1', port: process.env.PORT || 5000, path: '/health', timeout: 3000 }, (res) => { \
+    const req = http.request({ host: '127.0.0.1', port: process.env.PORT || 3000, path: '/health', timeout: 3000 }, (res) => { \
       process.exit(res.statusCode === 200 ? 0 : 1); \
     }); \
     req.on('error', () => process.exit(1)); \
@@ -50,3 +50,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Start application wrapped in dumb-init
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["node", "src/server.js"]
+

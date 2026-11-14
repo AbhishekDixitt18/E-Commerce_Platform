@@ -5,11 +5,15 @@
 
 const express = require('express');
 const healthRoutes = require('./health.routes');
+const productRoutes = require('./product.routes');
 
 const router = express.Router();
 
 // Mount Health Check under /api/v1/health
 router.use('/health', healthRoutes);
+
+// Mount Products under /api/v1/products
+router.use('/products', productRoutes);
 
 // Welcome endpoint for root API check
 router.get('/', (req, res) => {
@@ -23,3 +27,4 @@ router.get('/', (req, res) => {
 });
 
 module.exports = router;
+

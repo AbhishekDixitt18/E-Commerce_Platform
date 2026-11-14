@@ -18,7 +18,7 @@ const config = {
   isTest: environment === 'test',
 
   server: {
-    port: parseInt(process.env.PORT, 10) || 5000,
+    port: parseInt(process.env.PORT, 10) || 3000,
     apiPrefix: process.env.API_PREFIX || '/api/v1',
     corsOrigin: process.env.CORS_ORIGIN || '*',
   },
@@ -54,3 +54,4 @@ if (config.isProduction) {
 }
 
 module.exports = Object.freeze(config);
+

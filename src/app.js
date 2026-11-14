@@ -11,6 +11,8 @@ const morgan = require('morgan');
 const config = require('./config/env');
 const apiRoutes = require('./routes');
 const healthRoutes = require('./routes/health.routes');
+const healthController = require('./controllers/health.controller');
+const productRoutes = require('./routes/product.routes');
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -35,6 +37,10 @@ if (config.isDevelopment) {
 
 // Top-level health endpoints (for Docker HEALTHCHECK, AWS ALB, Kubernetes probes)
 app.use('/health', healthRoutes);
+app.get('/ready', (req, res, next) => healthController.getReadiness(req, res, next));
+
+// API product endpoints direct alias (/api/products)
+app.use('/api/products', productRoutes);
 
 // Versioned API endpoints (/api/v1)
 app.use(config.server.apiPrefix, apiRoutes);
@@ -61,3 +67,4 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 module.exports = app;
+
