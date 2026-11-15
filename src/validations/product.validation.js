@@ -32,7 +32,7 @@ const createProduct = {
     name: Joi.string().trim().max(255).required(),
     description: Joi.string().trim().allow('', null),
     price: Joi.number().positive().precision(2).required(),
-    currency: Joi.string().length(3).uppercase().default('USD'),
+    currency: Joi.string().length(3).uppercase().default('INR'),
     inventory_count: Joi.number().integer().min(0).default(0),
     category: Joi.string().trim().max(100).required(),
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'ARCHIVED').default('ACTIVE'),

@@ -159,7 +159,7 @@ class OrderService {
         customer_name,
         customer_email,
         calculatedTotal,
-        'USD',
+        'INR',
         'PENDING',
         shipping_address,
         idempotencyKey,

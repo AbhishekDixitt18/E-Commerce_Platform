@@ -149,8 +149,8 @@ GET /api/v1/products
       "sku": "PROD-LAPTOP-001",
       "name": "Developer Pro 16-Inch Laptop",
       "description": "32GB RAM, 1TB NVMe SSD, 12-core processor with high-resolution Retina-grade display.",
-      "price": "1899.99",
-      "currency": "USD",
+      "price": "129999.00",
+      "currency": "INR",
       "inventory_count": 44,
       "category": "Computers & Laptops",
       "status": "ACTIVE",
@@ -181,8 +181,8 @@ GET /api/v1/products/:id
     "sku": "PROD-LAPTOP-001",
     "name": "Developer Pro 16-Inch Laptop",
     "description": "32GB RAM, 1TB NVMe SSD...",
-    "price": "1899.99",
-    "currency": "USD",
+    "price": "129999.00",
+    "currency": "INR",
     "inventory_count": 44,
     "category": "Computers & Laptops",
     "status": "ACTIVE",
@@ -259,8 +259,8 @@ POST /api/v1/orders
         "productId": "3a5f1df7-fe03-4170-84ff-421f02b1f56f",
         "productName": "Developer Pro 16-Inch Laptop",
         "quantity": 1,
-        "unit_price": "1899.99",
-        "subtotal": "1899.99"
+        "unit_price": "129999.00",
+        "subtotal": "129999.00"
       }
     ],
     "created_at": "2026-11-15T16:53:30.829Z"

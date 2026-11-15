@@ -4,24 +4,23 @@
  * and localized human-readable timestamps.
  */
 
-// Official en-IN currency formatter adhering to the Indian numbering system
+// Official en-IN currency formatter adhering to the Indian numbering system without unnecessary decimal digits
 export const inrFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  maximumFractionDigits: 0,
 });
 
 /**
  * Format any numeric or string financial value as Indian Rupees (INR)
- * @example formatINR(1500) => "₹1,500.00"
- * @example formatINR(1250000) => "₹12,50,000.00"
+ * @example formatINR(129999) => "₹1,29,999"
+ * @example formatINR(34999) => "₹34,999"
  * @param {number|string} amount
  * @returns {string} Formatted INR currency string
  */
 export const formatINR = (amount) => {
   if (amount === null || amount === undefined || isNaN(Number(amount))) {
-    return '₹0.00';
+    return '₹0';
   }
   return inrFormatter.format(Number(amount));
 };

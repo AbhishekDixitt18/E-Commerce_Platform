@@ -146,6 +146,7 @@ jobs:
         run: |
           npm run db:init
           npm run db:seed
+          npm run db:migrate
 
       - name: Stage 4 - Execute Automated Test Suite with Coverage
         env:
@@ -402,7 +403,18 @@ jobs:
             sudo docker cp temp-sync-assets:/usr/src/app/frontend/dist/. ./frontend/dist/ 2>/dev/null || true
             sudo docker rm -f temp-sync-assets 2>/dev/null || true
 
-            # 5. Safely update application and reverse proxy (preserves postgres-prod-data volume)
+            # 5. Apply controlled database migrations before restarting application
+            echo "Applying controlled database migrations..."
+            if [ -d "database/migrations" ]; then
+              for migration_file in database/migrations/*.sql; do
+                if [ -f "$migration_file" ]; then
+                  echo "Processing migration: $migration_file"
+                  sudo docker exec -i ecommerce-postgres-prod psql -U postgres -d ecommerce_prod < "$migration_file"
+                fi
+              done
+            fi
+
+            # 6. Safely update application and reverse proxy (preserves postgres-prod-data volume)
             sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans app nginx
 
             # 6. Immediate internal health & frontend verification with retry loop
@@ -487,8 +499,8 @@ jobs:
           # Verify Products API through Nginx reverse proxy
           echo "Verifying Products REST API (/api/v1/products)..."
           API_RES=$(curl -sL --connect-timeout 5 "http://${EC2_HOST}/api/v1/products" || echo "{}")
-          if echo "$API_RES" | grep -q '"success":true'; then
-            echo "SUCCESS: Products API responding through Nginx reverse proxy."
+          if echo "$API_RES" | grep -q '129999'; then
+            echo "SUCCESS: Products API responding with verified INR pricing."
           else
             echo "::warning ::Products API response did not match expected structure."
           fi
