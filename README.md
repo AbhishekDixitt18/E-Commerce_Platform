@@ -15,11 +15,6 @@ Built as part of the Technical Assessment for **ALGIONS AI LABS PRIVATE LIMITED*
 | **API Health Probe** | AWS EC2 (Public) | **`http://54.252.184.109/health`** | Liveness probe (HTTP 200 `UP`) |
 | **Database Readiness** | AWS EC2 (Public) | **`http://54.252.184.109/health/ready`** | PostgreSQL connectivity & response time |
 | **Prometheus Metrics** | AWS EC2 (Public) | **`http://54.252.184.109/metrics`** | Application & connection pool telemetry |
-| **Local Frontend** | Local Workstation | **`http://localhost:5173/`** | Vite development server with HMR |
-| **Local API** | Local Workstation | **`http://localhost:3001/`** | Express REST API (internal port 3000) |
-| **Local PostgreSQL** | Local Workstation | **`localhost:5432`** | Development database (`ecommerce_dev`) |
-| **Local Prometheus** | Local Workstation | **`http://localhost:9090/`** | Prometheus metrics scraper UI |
-| **Local Grafana** | Local Workstation | **`http://localhost:3000/`** | Port 3000 preserved for Grafana dashboards |
 
 ---
 
@@ -144,7 +139,7 @@ E-Commerce_Platform/
 ├── .env.example                   # Environment variable template
 ├── .gitignore                     # Git exclusions
 ├── Dockerfile                     # 3-Stage Multi-stage build (Frontend + Dependencies + Runtime)
-├── docker-compose.yml             # Local workstation orchestration
+├── docker-compose.yml             # Development container orchestration
 ├── docker-compose.prod.yml        # Production AWS EC2 orchestration
 ├── package.json                   # Backend root package metadata & scripts
 └── README.md                      # Comprehensive project documentation
@@ -274,12 +269,12 @@ If health verification fails after recreation, the pipeline triggers an immediat
 
 ---
 
-## 🚀 Local Development Setup
+## 🚀 Development & Testing Setup
 
 ### Prerequisites
 - Node.js >= 20.x
 - Docker Engine & Docker Compose
-- PostgreSQL (optional if running locally via Docker)
+- PostgreSQL (optional if running via Docker)
 
 ### 1. Clone & Install Dependencies
 ```bash
@@ -298,7 +293,7 @@ cd frontend && npm install && cd ..
 cp .env.example .env
 ```
 
-### 3. Start Local Stack via Docker Compose
+### 3. Start Stack via Docker Compose
 ```bash
 # Starts Postgres (5432), Express API (3001), and Prometheus (9090)
 docker compose up -d --build
@@ -308,7 +303,6 @@ docker compose up -d --build
 ```bash
 cd frontend
 npm run dev
-# Frontend live at http://localhost:5173/
 ```
 
 ### 5. Run Automated Tests
@@ -343,10 +337,10 @@ sudo docker compose -f docker-compose.prod.yml up -d --build
 # Verify container statuses
 sudo docker compose -f docker-compose.prod.yml ps
 
-# Verify endpoints locally
-curl -I http://localhost/
-curl -I http://localhost/health
-curl -s http://localhost/api/v1/products | head -n 20
+# Verify endpoints
+curl -I http://127.0.0.1/
+curl -I http://127.0.0.1/health
+curl -s http://127.0.0.1/api/v1/products | head -n 20
 ```
 
 ---
