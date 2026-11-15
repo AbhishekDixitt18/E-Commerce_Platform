@@ -16,10 +16,75 @@ concurrency:
 
 jobs:
   # =============================================================================
-  # STAGES 1-4: Code Quality & Automated Testing
+  # STAGE 1: CHECKOUT
   # =============================================================================
-  quality-and-test:
-    name: Code Quality & Automated Tests
+  stage-1-checkout:
+    name: 'Stage 1: Checkout'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage 1 - Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Verify Git Repository & Commit Integrity
+        run: |
+          echo "=========================================="
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Git Branch/Ref: ${{ github.ref }}"
+          git log -1 --format="Author: %an <%ae>%nCommit: %H%nSubject: %s"
+          echo "=========================================="
+
+  # =============================================================================
+  # STAGE 2: DEPENDENCIES
+  # =============================================================================
+  stage-2-dependencies:
+    name: 'Stage 2: Dependencies'
+    needs: stage-1-checkout
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage 1 - Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20 Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Stage 2 - Install Dependencies from Lockfile
+        run: npm ci
+
+      - name: Verify Dependency Tree Integrity
+        run: npm ls --depth=0
+
+  # =============================================================================
+  # STAGE 3: CODE QUALITY
+  # =============================================================================
+  stage-3-code-quality:
+    name: 'Stage 3: Code Quality'
+    needs: stage-2-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage 1 - Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20 Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Stage 3 - Run Code Quality Static Analysis (ESLint)
+        run: npm run lint
+
+  # =============================================================================
+  # STAGE 4: AUTOMATED TESTING
+  # =============================================================================
+  stage-4-automated-testing:
+    name: 'Stage 4: Automated Testing'
+    needs: stage-3-code-quality
     runs-on: ubuntu-latest
 
     services:
@@ -47,11 +112,8 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Stage 2 - Install Dependencies from Lockfile
+      - name: Install Dependencies
         run: npm ci
-
-      - name: Stage 3 - Run Code Quality Static Analysis (ESLint)
-        run: npm run lint
 
       - name: Initialize Isolated PostgreSQL Test Database
         env:
@@ -76,35 +138,18 @@ jobs:
         run: npm run test:coverage
 
   # =============================================================================
-  # STAGES 5-8: Docker Build, Security Scan, Tagging & Docker Hub Publication
+  # STAGE 5: DOCKER BUILD
   # =============================================================================
-  docker-build-scan-push:
-    name: Docker Build, Security Scan & Publish
-    needs: quality-and-test
+  stage-5-docker-build:
+    name: 'Stage 5: Docker Build'
+    needs: stage-4-automated-testing
     runs-on: ubuntu-latest
-
     steps:
       - name: Stage 1 - Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Stage 7 - Generate Image Version Tags from Commit SHA
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_USERNAME || 'abhishekdixitt18' }}/ecommerce-cloud-devops
-          tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=branch
-
-      - name: Display Generated Version Tags
-        run: |
-          echo "Generated tags from commit SHA:"
-          echo "${{ steps.meta.outputs.tags }}"
 
       - name: Stage 5 - Build Application Docker Image
         uses: docker/build-push-action@v5
@@ -114,6 +159,39 @@ jobs:
           load: true
           tags: ecommerce-api:${{ github.sha }}
           cache-from: type=gha
+
+      - name: Save Docker Image to Artifact Archive
+        run: |
+          mkdir -p /tmp/docker-build
+          docker save ecommerce-api:${{ github.sha }} -o /tmp/docker-build/ecommerce-api.tar
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-build/ecommerce-api.tar
+          retention-days: 1
+
+  # =============================================================================
+  # STAGE 6: SECURITY SCANNING
+  # =============================================================================
+  stage-6-security-scanning:
+    name: 'Stage 6: Security Scanning'
+    needs: stage-5-docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage 1 - Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Built Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-build
+
+      - name: Load Docker Image into Runner Daemon
+        run: |
+          docker load -i /tmp/docker-build/ecommerce-api.tar
 
       - name: Stage 6 - Run Trivy Security Vulnerability Scanner
         uses: aquasecurity/trivy-action@v0.36.0
@@ -125,6 +203,60 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
+  # =============================================================================
+  # STAGE 7: IMAGE TAGGING
+  # =============================================================================
+  stage-7-image-tagging:
+    name: 'Stage 7: Image Tagging'
+    needs: stage-6-security-scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage 1 - Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Docker Hub Image Repository Name
+        id: img_info
+        run: |
+          REPO_USER="${{ secrets.DOCKERHUB_USERNAME }}"
+          if [ -z "$REPO_USER" ]; then
+            REPO_USER="abhishekdixitt18"
+          fi
+          echo "image_name=${REPO_USER}/ecommerce-cloud-devops" >> $GITHUB_OUTPUT
+
+      - name: Stage 7 - Generate Image Version Tags from Commit SHA
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img_info.outputs.image_name }}
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
+
+      - name: Display & Store Generated Version Tags
+        run: |
+          echo "=========================================="
+          echo "Generated Version Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "=========================================="
+          mkdir -p /tmp/docker-meta
+          echo "${{ steps.meta.outputs.tags }}" > /tmp/docker-meta/tags.txt
+
+      - name: Upload Version Tags Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-tags
+          path: /tmp/docker-meta/tags.txt
+          retention-days: 1
+
+  # =============================================================================
+  # STAGE 8: IMAGE PUSH
+  # =============================================================================
+  stage-8-image-push:
+    name: 'Stage 8: Image Push'
+    needs: stage-7-image-tagging
+    runs-on: ubuntu-latest
+    steps:
       - name: Check Docker Hub Credentials
         id: docker_secrets
         env:
@@ -136,8 +268,22 @@ jobs:
             echo "Docker Hub credentials are fully configured."
           else
             echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::warning ::Docker Hub secrets (DOCKERHUB_USERNAME and DOCKERHUB_TOKEN) are not configured in repository settings. Image push stage will be skipped until secrets are configured. Image building and Trivy vulnerability scanning completed successfully."
+            echo "::warning ::Docker Hub secrets (DOCKERHUB_USERNAME and DOCKERHUB_TOKEN) are not configured. Image push stage skipped. All prior validation stages passed."
           fi
+
+      - name: Download Docker Image Artifact
+        if: github.event_name != 'pull_request' && steps.docker_secrets.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-build
+
+      - name: Download Version Tags Artifact
+        if: github.event_name != 'pull_request' && steps.docker_secrets.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-tags
+          path: /tmp/docker-meta
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request' && steps.docker_secrets.outputs.configured == 'true'
@@ -146,14 +292,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Stage 8 - Push Validated Image to Docker Hub
+      - name: Stage 8 - Tag and Push Image to Docker Hub
         if: github.event_name != 'pull_request' && steps.docker_secrets.outputs.configured == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          docker load -i /tmp/docker-build/ecommerce-api.tar
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Tagging image: $tag"
+              docker tag ecommerce-api:${{ github.sha }} "$tag"
+              echo "Pushing image to Docker Hub: $tag"
+              docker push "$tag"
+            fi
+          done < /tmp/docker-meta/tags.txt
