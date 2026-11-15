@@ -1,29 +1,40 @@
 # =============================================================================
-# Production Multi-Stage Dockerfile for E-Commerce Platform REST API
-# Base: Official Node.js 20 Alpine Linux
+# Production Multi-Stage Dockerfile for E-Commerce Platform
+# Stage 1: Build React Frontend Static Assets
+# Stage 2: Install Backend Production Dependencies
+# Stage 3: Production Runtime (Node.js API + Static Assets)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build & Dependencies
+# Stage 1: Frontend Build
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 2: Backend Dependencies
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS dependencies
 
 WORKDIR /usr/src/app
 
-# Copy dependency manifests for reproducible layer caching
 COPY package*.json ./
-
-# Install only production dependencies cleanly from package-lock.json
 RUN npm ci --omit=dev && npm cache clean --force
 
 # -----------------------------------------------------------------------------
-# Stage 2: Production Runtime
+# Stage 3: Production Runtime
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS runtime
 
 WORKDIR /usr/src/app
 
-# Set production environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
 
@@ -32,9 +43,11 @@ RUN apk add --no-cache dumb-init
 
 # Copy production node_modules from dependencies stage
 COPY --from=dependencies /usr/src/app/node_modules ./node_modules
-COPY package*.json ./
 
-# Copy application source code, schemas, and initialization scripts
+# Copy compiled production frontend assets
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+COPY package*.json ./
 COPY src/ ./src/
 COPY database/ ./database/
 COPY scripts/ ./scripts/

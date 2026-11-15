@@ -50,17 +50,22 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Stage 2 - Install Dependencies from Lockfile
+      - name: Stage 2a - Install Backend Dependencies from Lockfile
         run: npm ci
+
+      - name: Stage 2b - Install Frontend Dependencies from Lockfile
+        run: |
+          cd frontend
+          npm ci
 
       - name: Verify Dependency Tree Integrity
         run: npm ls --depth=0
 
   # =============================================================================
-  # STAGE 3: CODE QUALITY
+  # STAGE 3: CODE QUALITY & FRONTEND BUILD
   # =============================================================================
   stage-3-code-quality:
-    name: 'Stage 3: Code Quality'
+    name: 'Stage 3: Code Quality & Frontend Build'
     needs: stage-2-dependencies
     runs-on: ubuntu-latest
     steps:
@@ -73,11 +78,18 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Dependencies
-        run: npm ci
+      - name: Install Backend & Frontend Dependencies
+        run: |
+          npm ci
+          cd frontend && npm ci
 
-      - name: Stage 3 - Run Code Quality Static Analysis (ESLint)
+      - name: Stage 3a - Run Backend Static Analysis (ESLint)
         run: npm run lint
+
+      - name: Stage 3b - Build Frontend Production Bundle (Vite)
+        run: |
+          cd frontend
+          npm run build
 
   # =============================================================================
   # STAGE 4: AUTOMATED TESTING
