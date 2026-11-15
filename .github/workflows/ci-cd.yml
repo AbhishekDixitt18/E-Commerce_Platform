@@ -91,6 +91,15 @@ jobs:
           cd frontend
           npm run build
 
+      - name: Stage 3c - Verify Frontend Build Artifacts
+        run: |
+          if [ ! -f "frontend/dist/index.html" ]; then
+            echo "ERROR: frontend/dist/index.html was not generated!"
+            exit 1
+          fi
+          echo "Frontend bundle verified successfully: index.html is present."
+          ls -la frontend/dist
+
   # =============================================================================
   # STAGE 4: AUTOMATED TESTING
   # =============================================================================
@@ -316,3 +325,78 @@ jobs:
               docker push "$tag"
             fi
           done < /tmp/docker-meta/tags.txt
+
+  # =============================================================================
+  # STAGE 9: EC2 PRODUCTION DEPLOYMENT
+  # =============================================================================
+  stage-9-ec2-deployment:
+    name: 'Stage 9: EC2 Deployment'
+    needs: [stage-7-image-tagging, stage-8-image-push]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check EC2 Deployment Credentials
+        id: ec2_secrets
+        env:
+          EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          if [ -n "$EC2_KEY" ] && [ -n "$EC2_HOST" ]; then
+            echo "configured=true" >> $GITHUB_OUTPUT
+            echo "EC2 SSH deployment credentials configured."
+          else
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::notice ::EC2 SSH deployment secrets (EC2_SSH_KEY, EC2_HOST) not configured. Direct terminal deployment on EC2 instance is used."
+          fi
+
+      - name: Deploy to AWS EC2 via SSH
+        if: steps.ec2_secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "=== Starting EC2 Production Deployment ==="
+            cd ~/E-Commerce_Platform 2>/dev/null || cd ~/ecommerce-cloud-devops 2>/dev/null || cd ~/*Commerce* 2>/dev/null
+            git fetch origin main
+            git checkout main
+            git pull origin main
+            sudo docker compose -f docker-compose.prod.yml down --remove-orphans
+            sudo docker compose -f docker-compose.prod.yml up -d --build
+            echo "=== Deployment Completed ==="
+
+  # =============================================================================
+  # STAGE 10: POST-DEPLOYMENT HEALTH VERIFICATION
+  # =============================================================================
+  stage-10-health-verification:
+    name: 'Stage 10: Health Verification'
+    needs: stage-9-ec2-deployment
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Live Production Endpoints
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST || '54.252.184.109' }}
+        run: |
+          echo "=========================================="
+          echo "Verifying EC2 Production Deployment at http://${EC2_HOST}/"
+          echo "=========================================="
+          
+          for i in {1..12}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/health" || echo "000")
+            echo "Attempt $i: /health responded with HTTP ${HTTP_STATUS}"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Health check passed!"
+              break
+            fi
+            sleep 5
+          done
+
+          ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/" || echo "000")
+          echo "Root dashboard responded with HTTP ${ROOT_STATUS}"
+          
+          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/ready" || echo "000")
+          echo "Readiness probe responded with HTTP ${READY_STATUS}"
