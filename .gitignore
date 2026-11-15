@@ -21,6 +21,9 @@ secrets/
 # Database data (if mounted locally)
 postgres-data/
 pgdata/
+backups/
+*.dump
+*.sql.gz
 
 # Logs
 logs/

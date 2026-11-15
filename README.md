@@ -562,3 +562,96 @@ The script executes 5 phases:
 3. **Phase 3 (Outage Verification):** Verifies incoming requests fail with HTTP 502 Bad Gateway through Nginx.
 4. **Phase 4 (Recovery):** Restarts the container and polls container health status until healthy.
 5. **Phase 5 (Post-Recovery Verification):** Confirms end-to-end recovery of health probes, database connection pool, and Prometheus metrics.
+
+---
+
+## 💾 Database Reliability Engineering: Backup, Restore & Rollback
+
+Comprehensive procedures for database backup creation, isolated verification restores, disaster recovery, and application container rollbacks.
+
+### 1. Database Backup (`scripts/backup.sh`)
+Generates timestamped, compressed (`.sql.gz`) PostgreSQL backups using `pg_dump`:
+- **Security:** Masks database credentials (`PGPASSWORD`), isolates environment variables, and locks file permissions to `0600` (owner read/write only).
+- **Format:** Clean SQL dump with `--clean --if-exists --no-owner --no-privileges` piped directly through high-compression `gzip -9`.
+- **Integrity Validation:** Validates file size and verifies gzip decompressibility before marking the backup as successful.
+
+```bash
+# Execute automated database backup
+sudo ./scripts/backup.sh
+```
+
+Backups are saved to `backups/` (e.g. `backups/ecommerce_prod_backup_YYYYMMDD_HHMMSS.sql.gz`).
+
+### 2. Database Restore (`scripts/restore.sh`)
+Restores backups into isolated test environments or production with strict safety controls:
+
+#### Safe Isolated Test Restore (Default)
+Restores the backup into a sandboxed test database (`ecommerce_restore_test`) to verify table integrity without risking production:
+```bash
+sudo ./scripts/restore.sh backups/<BACKUP_FILE>.sql.gz
+```
+
+#### Production Database Restore (Requires Explicit Confirmation)
+To prevent catastrophic accidental overwrites, restoring over production enforces a safety gate requiring explicit confirmation:
+```bash
+# Interactive prompt (requires typing 'OVERWRITE_PRODUCTION'):
+sudo ./scripts/restore.sh backups/<BACKUP_FILE>.sql.gz ecommerce_prod
+
+# Non-interactive / CI/CD automation flag:
+sudo ./scripts/restore.sh backups/<BACKUP_FILE>.sql.gz ecommerce_prod --confirm-production
+```
+
+### 3. End-to-End Backup & Restore Verification Suite
+Automated verification pipeline that tests the full lifecycle:
+1. Queries source database metrics (baseline product, order, and item counts).
+2. Generates a fresh timestamped backup via `backup.sh`.
+3. Verifies archive integrity, permissions, and SHA256 checksums.
+4. Restores into a dynamically created isolated test database (`ecommerce_verify_restore_<timestamp>`).
+5. Performs entity row count parity comparison between source and restored database.
+6. Automatically drops the isolated verification database upon completion.
+
+```bash
+# Execute end-to-end verification
+sudo ./scripts/verify-backup-restore.sh
+```
+
+---
+
+## 🔄 Application Container Rollback Guide
+
+Procedure for rolling back the application to a previous stable Docker image when an incident occurs:
+
+### Step 1: Identify Available Stable Image Tags
+Inspect local Docker images or Docker Hub tags:
+```bash
+# List local images and creation dates
+docker images --filter "reference=abhishekdixitt18/ecommerce-cloud-devops" \
+  --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}"
+```
+
+### Step 2: Roll Back Using the Automated Rollback Utility
+Run the automated rollback script specifying the previous stable tag or commit SHA:
+```bash
+# Roll back to specific image tag (e.g., commit SHA or release tag)
+sudo ./scripts/rollback.sh b275b7e
+
+# Or rollback to latest stable
+sudo ./scripts/rollback.sh latest
+```
+
+### Step 3: Manual Rollback Procedure
+If executing rollback manually:
+```bash
+# 1. Update APP_IMAGE in .env or shell environment
+export APP_IMAGE="abhishekdixitt18/ecommerce-cloud-devops:b275b7e"
+
+# 2. Recreate application container with previous image
+docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
+
+# 3. Verify container health status
+docker inspect --format='{{json .State.Health.Status}}' ecommerce-api-prod
+
+# 4. Probe health and readiness endpoints
+curl -i http://127.0.0.1/health
+curl -i http://127.0.0.1/ready
+```
