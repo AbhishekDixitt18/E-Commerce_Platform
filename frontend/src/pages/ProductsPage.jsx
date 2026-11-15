@@ -6,15 +6,17 @@ import {
   PlusCircle,
   Eye,
   ShoppingCart,
-  Boxes,
   Tag,
   Filter,
+  X,
+  Package,
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorAlert from '../components/ErrorAlert';
 import EmptyState from '../components/EmptyState';
 import { productService } from '../services/productService';
+import { formatINR, formatIndianNumber, formatDate } from '../utils/formatters';
 
 export default function ProductsPage() {
   const { globalRefreshTrigger } = useOutletContext() || {};
@@ -56,27 +58,33 @@ export default function ProductsPage() {
   // Client-side category filtering
   const filteredProducts = products.filter((p) => {
     const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
+    const title = p.name || p.title || '';
+    const desc = p.description || '';
+    const sku = p.sku || '';
+    const q = searchQuery.toLowerCase();
+
     const matchesSearch =
       !searchQuery ||
-      p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku?.toLowerCase().includes(searchQuery.toLowerCase());
+      title.toLowerCase().includes(q) ||
+      desc.toLowerCase().includes(q) ||
+      sku.toLowerCase().includes(q);
+
     return matchesCategory && matchesSearch;
   });
 
   return (
     <div>
       <div className="content-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.85rem' }}>
           <div>
-            <h2 className="content-title">Product Catalog</h2>
+            <h2 className="content-title">Product Management</h2>
             <p className="content-subtitle">
               Live products fetched directly from PostgreSQL database via Express REST API.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.65rem' }}>
             <Link to="/orders/new" className="btn-primary">
-              <PlusCircle size={16} /> Place Test Order
+              <PlusCircle size={15} /> Create Order
             </Link>
           </div>
         </div>
@@ -87,23 +95,23 @@ export default function ProductsPage() {
       {/* Toolbar: Search & Category Filter */}
       <div className="toolbar">
         <form onSubmit={handleSearchSubmit} className="search-input-wrapper">
-          <Search size={16} className="search-icon" />
+          <Search size={15} className="search-icon" />
           <input
             type="text"
             className="search-input"
-            placeholder="Search by title, SKU, or keyword..."
+            placeholder="Search by product name, SKU, or keyword..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </form>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.825rem' }}>
-            <Filter size={14} /> Filter:
+        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#475569', fontSize: '0.8rem', fontWeight: 500 }}>
+            <Filter size={13} /> Category:
           </div>
           <select
             className="form-control"
-            style={{ width: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.825rem' }}
+            style={{ width: 'auto', padding: '0.4rem 0.65rem', fontSize: '0.8rem' }}
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
@@ -114,7 +122,7 @@ export default function ProductsPage() {
             ))}
           </select>
           <button className="btn-refresh" onClick={fetchProducts} title="Refresh catalog">
-            <RefreshCw size={14} /> Refresh
+            <RefreshCw size={13} /> Refresh
           </button>
         </div>
       </div>
@@ -145,33 +153,34 @@ export default function ProductsPage() {
                 <tr>
                   <th>Product Details</th>
                   <th>Category</th>
-                  <th>Price</th>
+                  <th>Price (INR)</th>
                   <th>Available Stock</th>
-                  <th>Status</th>
+                  <th>Stock Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProducts.map((p) => {
-                  const isLow = p.inventory_count <= 10;
-                  const isOut = p.inventory_count === 0;
+                  const stock = parseInt(p.inventory_count, 10) || 0;
+                  const isLow = stock <= 10 && stock > 0;
+                  const isOut = stock === 0;
 
                   return (
                     <tr key={p.id}>
-                      <td style={{ maxWidth: 320 }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.title}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
+                      <td style={{ maxWidth: 300 }}>
+                        <div style={{ fontWeight: 600, color: '#1F2937' }}>{p.name || p.title}</div>
+                        <div style={{ fontSize: '0.725rem', color: '#64748B', marginTop: '0.1rem' }}>
                           SKU: <code>{p.sku}</code>
                         </div>
                         <div
                           style={{
-                            fontSize: '0.75rem',
-                            color: '#94a3b8',
+                            fontSize: '0.725rem',
+                            color: '#64748B',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            maxWidth: 300,
-                            marginTop: '0.15rem',
+                            maxWidth: 280,
+                            marginTop: '0.1rem',
                           }}
                         >
                           {p.description}
@@ -183,63 +192,53 @@ export default function ProductsPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '0.3rem',
-                            padding: '0.2rem 0.5rem',
+                            padding: '0.2rem 0.45rem',
                             backgroundColor: '#f1f5f9',
                             borderRadius: '4px',
-                            fontSize: '0.75rem',
+                            fontSize: '0.725rem',
                             fontWeight: 500,
                             color: '#475569',
                           }}
                         >
-                          <Tag size={12} /> {p.category}
+                          <Tag size={11} /> {p.category}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                        ${parseFloat(p.price).toFixed(2)}
+                      <td style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                        {formatINR(p.price)}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                           <span
                             style={{
                               fontWeight: 700,
-                              color: isOut ? '#dc2626' : isLow ? '#d97706' : '#16a34a',
+                              color: isOut ? '#DC2626' : isLow ? '#D97706' : '#15803D',
                             }}
                           >
-                            {p.inventory_count}
+                            {formatIndianNumber(stock)}
                           </span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>units</span>
+                          <span style={{ fontSize: '0.725rem', color: '#64748B' }}>units</span>
                         </div>
-                        {isLow && !isOut && (
-                          <div style={{ fontSize: '0.675rem', color: '#d97706', fontWeight: 600 }}>
-                            Low Stock
-                          </div>
-                        )}
-                        {isOut && (
-                          <div style={{ fontSize: '0.675rem', color: '#dc2626', fontWeight: 600 }}>
-                            Out of Stock
-                          </div>
-                        )}
                       </td>
                       <td>
-                        <StatusBadge status={isOut ? 'OUT_OF_STOCK' : p.status} />
+                        <StatusBadge status={isOut ? 'OUT_OF_STOCK' : isLow ? 'LOW_STOCK' : p.status} />
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.45rem' }}>
                           <button
                             className="btn-refresh"
-                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.725rem' }}
                             onClick={() => setSelectedProduct(p)}
-                            title="Inspect UUID and details"
+                            title="Inspect details and UUID"
                           >
-                            <Eye size={13} /> View
+                            <Eye size={12} /> View
                           </button>
                           <Link
                             to={`/orders/new?productId=${p.id}`}
                             className="btn-primary"
-                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
-                            title="Order this product"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.725rem' }}
+                            title="Place order for this item"
                           >
-                            <ShoppingCart size={13} /> Order
+                            <ShoppingCart size={12} /> Order
                           </Link>
                         </div>
                       </td>
@@ -252,75 +251,77 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Product Detail Modal */}
+      {/* Product Detail Modal (Enterprise 6px-8px Radius) */}
       {selectedProduct && (
-        <div className="sidebar-overlay" onClick={() => setSelectedProduct(null)}>
-          <div
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: '#fff',
-              padding: '1.75rem',
-              borderRadius: '12px',
-              maxWidth: '560px',
-              width: '90%',
-              zIndex: 60,
-              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+        <div className="modal-overlay" onClick={() => setSelectedProduct(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>{selectedProduct.title}</h3>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Product Specification</span>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#172B4D' }}>
+                  {selectedProduct.name || selectedProduct.title}
+                </h3>
+                <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Product Specifications</span>
               </div>
               <button
                 className="btn-refresh"
-                style={{ padding: '0.25rem 0.5rem' }}
+                style={{ padding: '0.2rem 0.4rem' }}
                 onClick={() => setSelectedProduct(null)}
+                aria-label="Close dialog"
               >
-                ✕
+                <X size={16} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.875rem' }}>
-              <div className="metric-row">
-                <span className="metric-label">Product UUID:</span>
-                <code style={{ fontSize: '0.775rem', background: '#f1f5f9', padding: '0.2rem 0.4rem', borderRadius: 4 }}>
-                  {selectedProduct.id}
-                </code>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">SKU:</span>
-                <span className="metric-val">{selectedProduct.sku}</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Category:</span>
-                <span className="metric-val">{selectedProduct.category}</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Unit Price:</span>
-                <span className="metric-val">${parseFloat(selectedProduct.price).toFixed(2)} {selectedProduct.currency}</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Warehouse Inventory:</span>
-                <span className="metric-val">{selectedProduct.inventory_count} units available</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Catalog Status:</span>
-                <StatusBadge status={selectedProduct.status} />
-              </div>
-              <div style={{ marginTop: '0.5rem' }}>
-                <span className="metric-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Description:</span>
-                <p style={{ color: '#475569', fontSize: '0.85rem', lineHeight: 1.5, background: '#f8fafc', padding: '0.75rem', borderRadius: 6 }}>
-                  {selectedProduct.description}
-                </p>
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
+                <div className="metric-row">
+                  <span className="metric-label">Product ID (UUID):</span>
+                  <code style={{ fontSize: '0.725rem', background: '#f1f5f9', padding: '0.15rem 0.35rem', borderRadius: 4 }}>
+                    {selectedProduct.id}
+                  </code>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">SKU:</span>
+                  <span className="metric-val">{selectedProduct.sku}</span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Category:</span>
+                  <span className="metric-val">{selectedProduct.category}</span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Unit Price:</span>
+                  <span className="metric-val" style={{ color: '#15803D', fontWeight: 700 }}>
+                    {formatINR(selectedProduct.price)}
+                  </span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Available Stock:</span>
+                  <span className="metric-val">
+                    {formatIndianNumber(selectedProduct.inventory_count)} units available
+                  </span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Status:</span>
+                  <StatusBadge
+                    status={
+                      parseInt(selectedProduct.inventory_count, 10) === 0
+                        ? 'OUT_OF_STOCK'
+                        : selectedProduct.status
+                    }
+                  />
+                </div>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <span className="metric-label" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>
+                    Description:
+                  </span>
+                  <p style={{ color: '#475569', fontSize: '0.825rem', lineHeight: 1.5, background: '#f8fafc', padding: '0.65rem', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                    {selectedProduct.description}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <div className="modal-footer">
               <button className="btn-refresh" onClick={() => setSelectedProduct(null)}>
                 Close
               </button>
@@ -329,7 +330,7 @@ export default function ProductsPage() {
                 className="btn-primary"
                 onClick={() => setSelectedProduct(null)}
               >
-                <ShoppingCart size={15} /> Checkout with this item
+                <ShoppingCart size={14} /> Place Order with this Item
               </Link>
             </div>
           </div>

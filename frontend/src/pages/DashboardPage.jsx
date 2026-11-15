@@ -7,8 +7,9 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  TrendingUp,
+  Server,
   Database,
-  CheckCircle2,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
@@ -17,6 +18,7 @@ import ErrorAlert from '../components/ErrorAlert';
 import { productService } from '../services/productService';
 import { orderService } from '../services/orderService';
 import { healthService } from '../services/healthService';
+import { formatINR, formatIndianNumber, formatDate } from '../utils/formatters';
 
 export default function DashboardPage() {
   const { globalRefreshTrigger } = useOutletContext() || {};
@@ -34,7 +36,7 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      // Parallel fetch from actual PostgreSQL backend
+      // Parallel fetch from live PostgreSQL backend
       const [productsRes, healthRes, readinessRes] = await Promise.allSettled([
         productService.getProducts({ limit: 50 }),
         healthService.getHealth(),
@@ -60,7 +62,7 @@ export default function DashboardPage() {
         setReadinessData(readinessRes.value);
       }
 
-      // Load session-tracked orders
+      // Load session-placed orders from real backend checkouts
       const orders = orderService.getSessionOrders();
       setRecentOrders(orders);
     } catch (err) {
@@ -75,114 +77,138 @@ export default function DashboardPage() {
   }, [globalRefreshTrigger]);
 
   if (loading && !products.length) {
-    return <LoadingSpinner message="Connecting to PostgreSQL backend & fetching metrics..." />;
+    return <LoadingSpinner message="Connecting to PostgreSQL backend & fetching live metrics..." />;
   }
 
   const lowStockProducts = products.filter((p) => p.inventory_count <= 10);
   const isDbConnected = readinessData?.dependencies?.database?.status === 'CONNECTED';
 
+  // Calculate cumulative order revenue from live completed orders
+  const totalOrderValue = recentOrders.reduce((sum, ord) => {
+    const val = parseFloat(ord.total_amount || ord.total || 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
   return (
     <div>
       <div className="content-header">
-        <h2 className="content-title">Executive Dashboard</h2>
+        <h2 className="content-title">Platform Overview</h2>
         <p className="content-subtitle">
-          Real-time PostgreSQL-backed catalog, order lifecycle, and cloud infrastructure telemetry.
+          Real-time PostgreSQL catalog metrics, order history, and cloud infrastructure telemetry.
         </p>
       </div>
 
       {error && <ErrorAlert error={error} onRetry={loadDashboardData} />}
 
-      {/* 4 Metric Statistic Cards */}
+      {/* Top 4 Summary Cards */}
       <div className="stats-grid">
         <StatCard
           title="Total Products"
-          value={totalProducts}
+          value={formatIndianNumber(totalProducts)}
           subtext="Active catalog items"
           icon={Package}
           color="blue"
         />
         <StatCard
           title="Total Orders"
-          value={recentOrders.length}
-          subtext="Session orders placed"
+          value={formatIndianNumber(recentOrders.length)}
+          subtext="Orders processed"
           icon={ShoppingCart}
           color="purple"
         />
         <StatCard
-          title="Total Inventory"
-          value={totalInventory}
-          subtext="Available units in warehouse"
+          title="Total Available Stock"
+          value={formatIndianNumber(totalInventory)}
+          subtext="Units available in warehouse"
           icon={Boxes}
           color="amber"
         />
         <StatCard
-          title="System Status"
-          value={healthData?.status === 'UP' ? 'HEALTHY' : 'CHECKING'}
-          subtext={`Uptime: ${healthData?.uptimeSeconds ? `${Math.floor(healthData.uptimeSeconds / 60)}m` : '0m'}`}
-          icon={Activity}
-          color={healthData?.status === 'UP' ? 'green' : 'amber'}
+          title="Total Order Value"
+          value={formatINR(totalOrderValue)}
+          subtext={recentOrders.length > 0 ? `Across ${recentOrders.length} processed order(s)` : 'No orders in current session'}
+          icon={TrendingUp}
+          color="green"
         />
       </div>
 
-      {/* Low Stock Alert Section */}
+      {/* Low Stock Warning Banner */}
       {lowStockProducts.length > 0 && (
         <div className="low-stock-box">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <AlertTriangle className="text-warning" size={24} style={{ color: '#d97706' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <AlertTriangle size={20} style={{ color: '#d97706', flexShrink: 0 }} />
             <div>
-              <strong style={{ color: '#92400e' }}>Inventory Warning: </strong>
-              <span style={{ color: '#78350f', fontSize: '0.875rem' }}>
-                {lowStockProducts.length} product(s) have critical stock levels (≤ 10 units).
+              <strong style={{ color: '#92400e', fontSize: '0.875rem' }}>Low Stock Notice: </strong>
+              <span style={{ color: '#78350f', fontSize: '0.85rem' }}>
+                {lowStockProducts.length} product(s) have low warehouse inventory (≤ 10 units remaining).
               </span>
             </div>
           </div>
-          <Link to="/inventory" className="btn-primary" style={{ backgroundColor: '#d97706', fontSize: '0.775rem', padding: '0.35rem 0.75rem' }}>
-            Inspect Inventory <ArrowRight size={14} />
+          <Link
+            to="/inventory"
+            className="btn-primary"
+            style={{ backgroundColor: '#d97706', fontSize: '0.75rem', padding: '0.35rem 0.7rem' }}
+          >
+            Review Stock <ArrowRight size={13} />
           </Link>
         </div>
       )}
 
-      {/* Main 2-Column Split: Product Summary & System Health */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem', marginBottom: '1.75rem' }}>
+      {/* 2-Column Split: Catalog Overview & System Health */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
         
-        {/* Product Inventory Summary */}
+        {/* Catalog Inventory Snapshot */}
         <div className="dashboard-card" style={{ marginBottom: 0 }}>
           <div className="card-header">
-            <h3 className="card-title">Catalog Inventory Snapshot</h3>
-            <Link to="/products" style={{ color: '#2563eb', fontSize: '0.825rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              View Catalog <ArrowRight size={14} />
+            <h3 className="card-title">Catalog Inventory Overview</h3>
+            <Link
+              to="/products"
+              style={{ color: '#2563eb', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              Full Catalog <ArrowRight size={13} />
             </Link>
           </div>
           <div className="table-responsive">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Product</th>
+                  <th>Product Name</th>
                   <th>Category</th>
-                  <th>Price</th>
+                  <th>Price (INR)</th>
                   <th>Stock</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {products.slice(0, 5).map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{p.title}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.sku}</div>
-                    </td>
-                    <td>{p.category}</td>
-                    <td style={{ fontWeight: 600 }}>${parseFloat(p.price).toFixed(2)}</td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: p.inventory_count <= 5 ? '#dc2626' : p.inventory_count <= 10 ? '#d97706' : '#16a34a' }}>
-                        {p.inventory_count} units
-                      </span>
-                    </td>
-                    <td>
-                      <StatusBadge status={p.inventory_count === 0 ? 'OUT_OF_STOCK' : p.status} />
-                    </td>
-                  </tr>
-                ))}
+                {products.slice(0, 5).map((p) => {
+                  const stock = parseInt(p.inventory_count, 10) || 0;
+                  const isLow = stock <= 10 && stock > 0;
+                  const isOut = stock === 0;
+
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{p.name || p.title}</div>
+                        <div style={{ fontSize: '0.725rem', color: '#64748b' }}>{p.sku}</div>
+                      </td>
+                      <td>{p.category}</td>
+                      <td style={{ fontWeight: 600 }}>{formatINR(p.price)}</td>
+                      <td>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color: isOut ? '#dc2626' : isLow ? '#d97706' : '#15803d',
+                          }}
+                        >
+                          {formatIndianNumber(stock)} units
+                        </span>
+                      </td>
+                      <td>
+                        <StatusBadge status={isOut ? 'OUT_OF_STOCK' : isLow ? 'LOW_STOCK' : p.status} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -191,38 +217,39 @@ export default function DashboardPage() {
         {/* Backend & Database Telemetry Card */}
         <div className="dashboard-card" style={{ marginBottom: 0 }}>
           <div className="card-header">
-            <h3 className="card-title">Backend & Database Telemetry</h3>
-            <Link to="/health" style={{ color: '#2563eb', fontSize: '0.825rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              Full Telemetry <ArrowRight size={14} />
+            <h3 className="card-title">System Health & Telemetry</h3>
+            <Link
+              to="/health"
+              style={{ color: '#2563eb', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              Diagnostics <ArrowRight size={13} />
             </Link>
           </div>
           <div className="card-body">
             <div className="metric-row">
               <span className="metric-label">API Service Status</span>
-              <StatusBadge status={healthData?.status || 'UNKNOWN'} />
+              <StatusBadge status={healthData?.status === 'UP' ? 'HEALTHY' : 'CHECKING'} />
             </div>
             <div className="metric-row">
               <span className="metric-label">Database Engine</span>
-              <span className="metric-val">PostgreSQL 16 (Alpine)</span>
+              <span className="metric-val">PostgreSQL 16</span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">PostgreSQL Connectivity</span>
+              <span className="metric-label">Database Connectivity</span>
               <StatusBadge status={isDbConnected ? 'CONNECTED' : 'DISCONNECTED'} />
             </div>
             <div className="metric-row">
-              <span className="metric-label">Database Round-trip Latency</span>
+              <span className="metric-label">Database Response Time</span>
               <span className="metric-val">{readinessData?.dependencies?.database?.latencyMs ?? 0} ms</span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">Active Connection Pool</span>
+              <span className="metric-label">Application Uptime</span>
               <span className="metric-val">
-                {readinessData?.dependencies?.database?.pool?.totalCount ?? 0} total (
-                {readinessData?.dependencies?.database?.pool?.idleCount ?? 0} idle,{' '}
-                {readinessData?.dependencies?.database?.pool?.waitingCount ?? 0} waiting)
+                {healthData?.uptimeSeconds ? `${Math.floor(healthData.uptimeSeconds / 60)} minutes (${healthData.uptimeSeconds}s)` : '0s'}
               </span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">Node.js Version</span>
+              <span className="metric-label">Node.js Engine</span>
               <span className="metric-val">{readinessData?.system?.nodeVersion || 'v20.x'}</span>
             </div>
           </div>
@@ -235,20 +262,20 @@ export default function DashboardPage() {
         <div className="card-header">
           <div>
             <h3 className="card-title">Recent Customer Orders</h3>
-            <p style={{ fontSize: '0.775rem', color: '#64748b' }}>
+            <p style={{ fontSize: '0.75rem', color: '#64748b' }}>
               Orders created during this session (synchronized with PostgreSQL).
             </p>
           </div>
-          <Link to="/orders/new" className="btn-primary" style={{ fontSize: '0.825rem' }}>
-            + Place New Order
+          <Link to="/orders/new" className="btn-primary" style={{ fontSize: '0.8rem' }}>
+            + Create Order
           </Link>
         </div>
         {recentOrders.length === 0 ? (
-          <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b' }}>
-            <ShoppingCart size={36} style={{ margin: '0 auto 0.75rem', color: '#94a3b8' }} />
-            <p style={{ fontWeight: 600 }}>No orders placed in this session yet.</p>
-            <p style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-              Use the "Create Order" page to test idempotent checkouts against the live backend.
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
+            <ShoppingCart size={32} style={{ margin: '0 auto 0.5rem', color: '#94a3b8' }} />
+            <p style={{ fontWeight: 600, fontSize: '0.9rem' }}>No orders placed in this session yet.</p>
+            <p style={{ fontSize: '0.775rem', marginTop: '0.2rem' }}>
+              Use the "Create Order" page to submit new transactions with Idempotency protection.
             </p>
           </div>
         ) : (
@@ -257,10 +284,10 @@ export default function DashboardPage() {
               <thead>
                 <tr>
                   <th>Order Number</th>
-                  <th>Customer</th>
-                  <th>Total</th>
+                  <th>Customer Name & Email</th>
+                  <th>Total Amount (INR)</th>
                   <th>Status</th>
-                  <th>Date & Time</th>
+                  <th>Order Date</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -269,23 +296,25 @@ export default function DashboardPage() {
                   <tr key={order.id}>
                     <td>
                       <div style={{ fontWeight: 600, color: '#2563eb' }}>{order.order_number || order.orderNumber}</div>
-                      <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>{order.id}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{order.id}</div>
                     </td>
                     <td>
                       <div style={{ fontWeight: 500 }}>{order.customer_name || order.customerName}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{order.customer_email || order.customerEmail}</div>
+                      <div style={{ fontSize: '0.725rem', color: '#64748b' }}>{order.customer_email || order.customerEmail}</div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>${parseFloat(order.total_amount || order.total || 0).toFixed(2)}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {formatINR(order.total_amount || order.total || 0)}
+                    </td>
                     <td>
                       <StatusBadge status={order.status || 'PENDING'} />
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      {new Date(order.created_at || order.createdAt || Date.now()).toLocaleString()}
+                    <td style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                      {formatDate(order.created_at || order.createdAt || Date.now())}
                     </td>
                     <td>
                       <Link
                         to={`/orders?lookupId=${order.id}`}
-                        style={{ color: '#2563eb', fontSize: '0.8rem', fontWeight: 600 }}
+                        style={{ color: '#2563eb', fontSize: '0.775rem', fontWeight: 600 }}
                       >
                         Inspect →
                       </Link>

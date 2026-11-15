@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, RefreshCw, Radio } from 'lucide-react';
+import { Menu, RefreshCw } from 'lucide-react';
 import { healthService } from '../services/healthService';
 
 export default function Header({ pageTitle, onMenuToggle, onRefresh }) {
@@ -31,7 +31,7 @@ export default function Header({ pageTitle, onMenuToggle, onRefresh }) {
     if (onRefresh) {
       await onRefresh();
     }
-    setTimeout(() => setIsRefreshing(false), 500);
+    setTimeout(() => setIsRefreshing(false), 400);
   };
 
   return (
@@ -42,7 +42,7 @@ export default function Header({ pageTitle, onMenuToggle, onRefresh }) {
           onClick={onMenuToggle}
           aria-label="Toggle navigation menu"
         >
-          <Menu size={22} />
+          <Menu size={20} />
         </button>
         <h1 className="page-title">{pageTitle || 'E-Commerce Cloud Platform'}</h1>
       </div>
@@ -52,10 +52,10 @@ export default function Header({ pageTitle, onMenuToggle, onRefresh }) {
           <span className="pulse-dot" />
           <span>
             {connectionStatus === 'online'
-              ? 'API Live'
+              ? 'Backend Connected'
               : connectionStatus === 'offline'
-              ? 'API Offline'
-              : 'Checking API'}
+              ? 'Backend Unreachable'
+              : 'Verifying Connection...'}
           </span>
         </div>
 
@@ -64,7 +64,7 @@ export default function Header({ pageTitle, onMenuToggle, onRefresh }) {
           onClick={handleRefreshClick}
           title="Refresh Data from Backend"
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={13} />
           <span>Refresh</span>
         </button>
       </div>

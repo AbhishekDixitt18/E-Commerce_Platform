@@ -4,20 +4,21 @@ import {
   Search,
   ShoppingCart,
   PlusCircle,
-  AlertCircle,
-  CheckCircle2,
-  Package,
   Calendar,
   User,
   MapPin,
-  DollarSign,
-  ShieldAlert,
+  CreditCard,
+  ShieldCheck,
+  Eye,
+  X,
+  PackageCheck,
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorAlert from '../components/ErrorAlert';
 import EmptyState from '../components/EmptyState';
 import { orderService } from '../services/orderService';
+import { formatINR, formatIndianNumber, formatDate } from '../utils/formatters';
 
 export default function OrdersPage() {
   const [searchParams] = useSearchParams();
@@ -29,13 +30,14 @@ export default function OrdersPage() {
   const [lookupResult, setLookupResult] = useState(null);
 
   const [sessionOrders, setSessionOrders] = useState([]);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
 
   useEffect(() => {
-    // Load local session-tracked orders
+    // Load local session-tracked orders from real backend transactions
     const orders = orderService.getSessionOrders();
     setSessionOrders(orders);
 
-    // If lookupId query param was supplied, auto-trigger lookup
+    // Auto-trigger lookup if query param provided
     const initialLookup = searchParams.get('lookupId');
     if (initialLookup) {
       setLookupId(initialLookup);
@@ -69,44 +71,32 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="content-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.85rem' }}>
           <div>
             <h2 className="content-title">Order Management & Lookup</h2>
             <p className="content-subtitle">
-              Query customer orders by UUID and monitor recently created orders in the live database.
+              Verify customer orders by UUID and monitor completed transactions recorded in PostgreSQL.
             </p>
           </div>
           <Link to="/orders/new" className="btn-primary">
-            <PlusCircle size={16} /> Create New Order
+            <PlusCircle size={15} /> Create Order
           </Link>
         </div>
       </div>
 
-      {/* Backend Architecture Notice: Documenting deliberate lack of public listing */}
-      <div className="alert alert-info" style={{ alignItems: 'center' }}>
-        <ShieldAlert size={20} style={{ flexShrink: 0, color: '#2563eb' }} />
-        <div>
-          <strong>Backend API Architectural Specification: </strong>
-          <span style={{ fontSize: '0.825rem' }}>
-            The backend REST API adheres to strict customer privacy principles and exposes{' '}
-            <code>GET /api/v1/orders/:id</code> for direct order verification. In compliance with the assessment guidelines, no unsupported bulk order listing endpoint is invented; use the verified lookup tool below or the session registry.
-          </span>
-        </div>
-      </div>
-
-      {/* Order Lookup Form */}
+      {/* Direct Order Lookup Form */}
       <div className="dashboard-card">
         <div className="card-header">
-          <h3 className="card-title">Direct Order Lookup by UUID</h3>
+          <h3 className="card-title">Order Lookup by ID</h3>
         </div>
         <div className="card-body">
-          <form onSubmit={handleLookupSubmit} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-              <Search size={16} className="search-icon" />
+          <form onSubmit={handleLookupSubmit} style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '260px', position: 'relative' }}>
+              <Search size={15} className="search-icon" />
               <input
                 type="text"
                 className="search-input"
-                placeholder="Paste Order UUID (e.g. 183e0dda-6f2c-4fc7-8f47-cbee1b28ebb5)..."
+                placeholder="Enter Order UUID (e.g. 79a19aa6-76cf-494c-a11d-51e63081cf3f)..."
                 value={lookupId}
                 onChange={(e) => setLookupId(e.target.value)}
               />
@@ -116,12 +106,12 @@ export default function OrdersPage() {
               className="btn-primary"
               disabled={lookupLoading || !lookupId.trim()}
             >
-              {lookupLoading ? 'Querying...' : 'Lookup Order'}
+              {lookupLoading ? 'Searching...' : 'Lookup Order'}
             </button>
           </form>
 
           {lookupError && (
-            <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ marginTop: '1rem' }}>
               <ErrorAlert error={lookupError} onRetry={() => performLookup()} />
             </div>
           )}
@@ -130,11 +120,11 @@ export default function OrdersPage() {
           {lookupResult && (
             <div
               style={{
-                marginTop: '1.5rem',
-                padding: '1.25rem',
+                marginTop: '1.25rem',
+                padding: '1.15rem',
                 backgroundColor: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: '8px',
+                borderRadius: '6px',
               }}
             >
               <div
@@ -143,80 +133,89 @@ export default function OrdersPage() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   borderBottom: '1px solid #e2e8f0',
-                  paddingBottom: '0.75rem',
-                  marginBottom: '1rem',
+                  paddingBottom: '0.65rem',
+                  marginBottom: '0.85rem',
                   flexWrap: 'wrap',
                   gap: '0.5rem',
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>VERIFIED DATABASE ORDER</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+                    Verified Database Record
+                  </div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#172B4D' }}>
                     {lookupResult.order?.order_number || lookupResult.order?.orderNumber}
                   </div>
                 </div>
                 <StatusBadge status={lookupResult.order?.status} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1rem' }}>
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <User size={13} /> Customer Details
+                  <div style={{ fontSize: '0.725rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <User size={12} /> Customer Name
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{lookupResult.order?.customer_name || lookupResult.order?.customerName}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{lookupResult.order?.customer_email || lookupResult.order?.customerEmail}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <MapPin size={13} /> Shipping Address
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                    {lookupResult.order?.customer_name || lookupResult.order?.customerName}
                   </div>
-                  <div style={{ fontSize: '0.875rem' }}>{lookupResult.order?.shipping_address || lookupResult.order?.shippingAddress}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <DollarSign size={13} /> Total Amount
-                  </div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#16a34a' }}>
-                    ${parseFloat(lookupResult.order?.total_amount || lookupResult.order?.total || 0).toFixed(2)}{' '}
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{lookupResult.order?.currency || 'USD'}</span>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    {lookupResult.order?.customer_email || lookupResult.order?.customerEmail}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Calendar size={13} /> Created Timestamp
+                  <div style={{ fontSize: '0.725rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <MapPin size={12} /> Shipping Address
                   </div>
-                  <div style={{ fontSize: '0.85rem' }}>
-                    {new Date(lookupResult.order?.created_at || lookupResult.order?.createdAt).toLocaleString()}
+                  <div style={{ fontSize: '0.825rem' }}>
+                    {lookupResult.order?.shipping_address || lookupResult.order?.shippingAddress}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.725rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <CreditCard size={12} /> Total Amount (INR)
+                  </div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#15803D' }}>
+                    {formatINR(lookupResult.order?.total_amount || lookupResult.order?.total || 0)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.725rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Calendar size={12} /> Placed Date
+                  </div>
+                  <div style={{ fontSize: '0.8rem' }}>
+                    {formatDate(lookupResult.order?.created_at || lookupResult.order?.createdAt)}
                   </div>
                 </div>
               </div>
 
               {/* Items Purchased Breakdown */}
-              <div style={{ marginTop: '1rem' }}>
-                <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem', color: '#475569' }}>
-                  Purchased Items Snapshot ({lookupResult.items?.length || 0})
+              <div style={{ marginTop: '0.85rem' }}>
+                <h4 style={{ fontSize: '0.825rem', fontWeight: 600, marginBottom: '0.45rem', color: '#475569' }}>
+                  Ordered Items ({lookupResult.items?.length || 0})
                 </h4>
                 <div className="table-responsive">
-                  <table className="data-table" style={{ background: '#fff', borderRadius: '6px', overflow: 'hidden' }}>
+                  <table className="data-table" style={{ background: '#fff', borderRadius: '4px', overflow: 'hidden' }}>
                     <thead>
                       <tr>
-                        <th>Product Title</th>
-                        <th>Qty</th>
-                        <th>Unit Price (At Checkout)</th>
-                        <th>Subtotal</th>
+                        <th>Item Description</th>
+                        <th>Quantity</th>
+                        <th>Unit Price (INR)</th>
+                        <th>Subtotal (INR)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(lookupResult.items || []).map((item, idx) => (
                         <tr key={idx}>
-                          <td style={{ fontWeight: 500 }}>{item.title || item.product_id || item.productId}</td>
+                          <td style={{ fontWeight: 500 }}>
+                            {item.title || item.name || item.product_id || item.productId}
+                          </td>
                           <td style={{ fontWeight: 600 }}>{item.quantity}</td>
-                          <td>${parseFloat(item.unit_price || item.unitPrice || 0).toFixed(2)}</td>
+                          <td>{formatINR(item.unit_price || item.unitPrice || 0)}</td>
                           <td style={{ fontWeight: 600 }}>
-                            ${parseFloat(item.subtotal || item.quantity * item.unit_price || 0).toFixed(2)}
+                            {formatINR(item.subtotal || item.quantity * (item.unit_price || 0))}
                           </td>
                         </tr>
                       ))}
@@ -229,21 +228,21 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Session Order History */}
+      {/* Session Order History Table */}
       <div className="dashboard-card">
         <div className="card-header">
           <div>
-            <h3 className="card-title">Session-Tracked Orders</h3>
-            <p style={{ fontSize: '0.775rem', color: '#64748b' }}>
-              Orders created during this admin session across test runs. Click "Lookup" to pull the fresh state from PostgreSQL.
+            <h3 className="card-title">Completed Orders</h3>
+            <p style={{ fontSize: '0.75rem', color: '#64748B' }}>
+              Orders created during this session. Click "View Details" to view full items and shipping breakdown.
             </p>
           </div>
         </div>
 
         {sessionOrders.length === 0 ? (
           <EmptyState
-            title="No orders placed yet"
-            description="Create an order using the checkout interface to verify PostgreSQL order generation and inventory deduction."
+            title="No orders created yet"
+            description="Use the Create Order page to place transactions with automatic inventory reduction in PostgreSQL."
             icon={ShoppingCart}
             actionText="Place First Order"
             onAction={() => (window.location.href = '/orders/new')}
@@ -255,11 +254,11 @@ export default function OrdersPage() {
                 <tr>
                   <th>Order Number</th>
                   <th>Customer</th>
-                  <th>Total</th>
+                  <th>Total Amount (INR)</th>
                   <th>Status</th>
-                  <th>Idempotent Replay?</th>
-                  <th>Date & Time</th>
-                  <th>Action</th>
+                  <th>Replay Check</th>
+                  <th>Order Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -267,41 +266,43 @@ export default function OrdersPage() {
                   <tr key={ord.id}>
                     <td>
                       <div style={{ fontWeight: 600, color: '#2563eb' }}>{ord.order_number || ord.orderNumber}</div>
-                      <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>{ord.id}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{ord.id}</div>
                     </td>
                     <td>
                       <div style={{ fontWeight: 500 }}>{ord.customer_name || ord.customerName}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{ord.customer_email || ord.customerEmail}</div>
+                      <div style={{ fontSize: '0.725rem', color: '#64748B' }}>{ord.customer_email || ord.customerEmail}</div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>${parseFloat(ord.total_amount || ord.total || 0).toFixed(2)}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {formatINR(ord.total_amount || ord.total || 0)}
+                    </td>
                     <td>
                       <StatusBadge status={ord.status || 'PENDING'} />
                     </td>
                     <td>
                       {ord.isIdempotentReplay ? (
-                        <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
-                          Replayed (Cached)
+                        <span className="badge badge-warning" style={{ fontSize: '0.675rem' }}>
+                          Cached Replay
                         </span>
                       ) : (
-                        <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
-                          Original
+                        <span className="badge badge-success" style={{ fontSize: '0.675rem' }}>
+                          New Transaction
                         </span>
                       )}
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      {new Date(ord.created_at || ord.createdAt || Date.now()).toLocaleString()}
+                    <td style={{ fontSize: '0.775rem', color: '#64748B' }}>
+                      {formatDate(ord.created_at || ord.createdAt || Date.now())}
                     </td>
                     <td>
                       <button
                         className="btn-refresh"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.725rem' }}
                         onClick={() => {
                           setLookupId(ord.id);
                           performLookup(ord.id);
-                          window.scrollTo({ top: 150, behavior: 'smooth' });
+                          window.scrollTo({ top: 120, behavior: 'smooth' });
                         }}
                       >
-                        Lookup →
+                        <Eye size={12} /> View Details
                       </button>
                     </td>
                   </tr>

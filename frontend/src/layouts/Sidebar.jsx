@@ -14,10 +14,10 @@ import {
 export default function Sidebar({ isOpen, onClose }) {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/products', label: 'Products', icon: Package },
-    { to: '/orders', label: 'Orders', icon: ShoppingCart },
+    { to: '/products', label: 'Product Management', icon: Package },
+    { to: '/orders', label: 'Order Management', icon: ShoppingCart },
     { to: '/orders/new', label: 'Create Order', icon: PlusCircle },
-    { to: '/inventory', label: 'Inventory', icon: Boxes },
+    { to: '/inventory', label: 'Inventory Management', icon: Boxes },
     { to: '/health', label: 'System Health', icon: Activity },
   ];
 
@@ -25,10 +25,10 @@ export default function Sidebar({ isOpen, onClose }) {
     <>
       {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        <div className="sidebar-header" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
             <div className="sidebar-logo-icon">
-              <Server size={20} />
+              <Server size={18} />
             </div>
             <div>
               <div className="sidebar-title">E-Commerce</div>
@@ -41,7 +41,7 @@ export default function Sidebar({ isOpen, onClose }) {
             onClick={onClose}
             aria-label="Close menu"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
@@ -56,7 +56,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
                 onClick={onClose}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 <span>{item.label}</span>
               </NavLink>
             );
@@ -66,10 +66,10 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="sidebar-footer">
           <div className="sidebar-badge">
             <span className="pulse-dot" style={{ backgroundColor: '#10b981' }} />
-            <span>EC2 / Nginx Active</span>
+            <span>AWS EC2 / Nginx Active</span>
           </div>
-          <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.7rem' }}>
-            ALGIONS DevOps Assessment
+          <div style={{ marginTop: '0.4rem', color: '#94a3b8', fontSize: '0.7rem' }}>
+            ALGIONS DevOps Platform
           </div>
         </div>
       </aside>

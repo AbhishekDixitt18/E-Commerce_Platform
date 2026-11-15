@@ -20,4 +20,22 @@ export const productService = {
     const response = await api.get(`/api/v1/products/${id}`);
     return response.data.data;
   },
+
+  /**
+   * Update product inventory stock through protected administrative endpoint
+   * @param {string} id - Product UUID
+   * @param {number} inventoryCount - New stock count
+   * @param {string} [adminApiKey] - Optional custom admin key, defaults to dev key
+   */
+  async updateStock(id, inventoryCount, adminApiKey = 'algions-devops-admin-key-2026') {
+    const headers = {
+      'x-admin-api-key': adminApiKey,
+    };
+    const response = await api.patch(
+      `/api/v1/admin/products/${id}/stock`,
+      { inventory_count: Number(inventoryCount) },
+      { headers }
+    );
+    return response.data.data;
+  },
 };
