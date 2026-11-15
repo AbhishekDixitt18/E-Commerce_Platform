@@ -1,8 +1,8 @@
 # Cloud Deployment & CI/CD – E-Commerce Platform
 
-A production-grade, full-stack E-Commerce Product and Order Management Platform featuring a modern React Admin Dashboard, Node.js/Express REST API, PostgreSQL database, Nginx reverse proxy, Prometheus observability, and an automated 10-stage GitHub Actions CI/CD pipeline deployed on AWS EC2.
+A production-grade, full-stack E-Commerce Product and Order Management Platform featuring an interactive React Admin Dashboard, Node.js/Express REST API, PostgreSQL database, Nginx reverse proxy, Prometheus observability, and a 10-stage automated GitHub Actions CI/CD pipeline deployed on Amazon Web Services (AWS) EC2.
 
-Built as part of the Technical Assessment for **ALGIONS AI LABS PRIVATE LIMITED**.
+Developed as part of the Technical Assessment for **ALGIONS AI LABS PRIVATE LIMITED** in the DevOps & Cloud Engineering Domain.
 
 ---
 
@@ -15,68 +15,113 @@ Built as part of the Technical Assessment for **ALGIONS AI LABS PRIVATE LIMITED*
 | **API Health Probe** | AWS EC2 (Public) | **`http://54.252.184.109/health`** | Liveness probe (HTTP 200 `UP`) |
 | **Database Readiness** | AWS EC2 (Public) | **`http://54.252.184.109/health/ready`** | PostgreSQL connectivity & response time |
 | **Prometheus Metrics** | AWS EC2 (Public) | **`http://54.252.184.109/metrics`** | Application & connection pool telemetry |
+| **Prometheus Dashboard**| AWS EC2 (Public) | **`http://54.252.184.109:9090`** | Prometheus metrics scraper UI |
 
 ---
 
-## 🛠 Technology Stack
-
-### Frontend Architecture
-- **Framework:** React 18.3.1 (Single-Page Application)
-- **Tooling & Bundler:** Vite 5.2.11 (optimized ES modules, chunking, gzip compression)
-- **Routing:** React Router v6 (`BrowserRouter` with Nginx `try_files` SPA history fallback)
-- **HTTP Client:** Axios 1.6.8 (with base URL resolver & custom error interceptors)
-- **Icons & Typography:** Lucide React & Google Inter font
-- **Currency Standard:** Indian Rupees (INR) formatted via `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })`
-- **Design System:** Custom Enterprise CSS (`#172B4D` Deep Navy, `#2563EB` Blue, 4px–6px radii)
-
-### Backend Architecture
-- **Runtime & Framework:** Node.js 20 LTS & Express 4.19
-- **Database Engine:** PostgreSQL 16 Alpine with connection pooling (`pg` Pool)
-- **Schema Validation:** Joi schema validation middleware
-- **Security & Headers:** Helmet, CORS, parameterized queries, non-root container (`USER node`)
-- **Process Manager:** `dumb-init` (PID 1 zombie reaping and graceful `SIGTERM` shutdown)
-- **Testing Suite:** Jest & Supertest (100% pass rate, >82% code coverage)
-
-### Cloud, DevOps & Infrastructure
-- **Cloud Provider:** Amazon Web Services (AWS)
-- **Compute Instance:** AWS EC2 (`t2.micro`, Ubuntu 24.04 LTS, Sydney `ap-southeast-2`)
-- **Reverse Proxy:** Nginx 1.25 Alpine (HTTP/HTTPS, rate limiting, gzip, static caching)
-- **Containerization:** Docker & Docker Compose (3-stage multi-stage Docker build)
-- **Image Registry:** Docker Hub (`abhishekdixitt18/ecommerce-cloud-devops`)
-- **CI/CD Pipeline:** GitHub Actions (10 automated stages with rollback guard)
-- **Observability:** Prometheus 2.51 & `prom-client` structured metrics
+## Table of Contents
+1. [Project Title and Overview](#1-project-title-and-overview)
+2. [Problem Statement](#2-problem-statement)
+3. [Project Objectives](#3-project-objectives)
+4. [Key Features](#4-key-features)
+5. [Technology Stack](#5-technology-stack)
+6. [System Architecture](#6-system-architecture)
+7. [Project Directory Structure](#7-project-directory-structure)
+8. [Application Components](#8-application-components)
+9. [Backend API Overview](#9-backend-api-overview)
+10. [Database Design](#10-database-design)
+11. [Business Logic and Validation](#11-business-logic-and-validation)
+12. [Idempotent Order Creation](#12-idempotent-order-creation)
+13. [Inventory Management and Stock Protection](#13-inventory-management-and-stock-protection)
+14. [Admin Authentication and Audit Logging](#14-admin-authentication-and-audit-logging)
+15. [Docker and Docker Compose Setup](#15-docker-and-docker-compose-setup)
+16. [Environment Variables and Configuration](#16-environment-variables-and-configuration)
+17. [Local Installation and Execution](#17-local-installation-and-execution)
+18. [Automated CI/CD Pipeline](#18-automated-cicd-pipeline)
+19. [Docker Image Build and Registry Push](#19-docker-image-build-and-registry-push)
+20. [AWS EC2 Deployment Architecture](#20-aws-ec2-deployment-architecture)
+21. [Nginx Reverse Proxy Configuration](#21-nginx-reverse-proxy-configuration)
+22. [Frontend Deployment](#22-frontend-deployment)
+23. [Monitoring and Observability](#23-monitoring-and-observability)
+24. [Health Checks and Readiness](#24-health-checks-and-readiness)
+25. [Logging and Troubleshooting](#25-logging-and-troubleshooting)
+26. [Database Backup and Restore](#26-database-backup-and-restore)
+27. [Deployment Rollback and Recovery](#27-deployment-rollback-and-recovery)
+28. [Security Practices](#28-security-practices)
+29. [Testing and Validation](#29-testing-and-validation)
+30. [Known Limitations](#30-known-limitations)
+31. [Future Enhancements](#31-future-enhancements)
+32. [Author and Internship Information](#32-author-and-internship-information)
 
 ---
 
-## 🏗 High-Level System Architecture
+## 1. Project Title and Overview
+The **Cloud Deployment & CI/CD – E-Commerce Platform** is a containerized, cloud-deployed e-commerce infrastructure delivering transactional product management, stock protection, order placement, and an administrative dashboard. Engineered from ground up to fulfill enterprise DevOps standards, the platform demonstrates automated continuous delivery, high availability, site reliability engineering (SRE), and least-privilege security.
+
+## 2. Problem Statement
+Modern e-commerce platforms frequently encounter operational challenges:
+- **Deployment Downtime & Human Error:** Manual code pulling (`git pull`), manual builds, and container restarts on production virtual machines introduce configuration drift and service interruptions.
+- **Concurrency & Race Conditions:** High-traffic sales can cause overselling and negative inventory when multiple checkouts compete for identical stock.
+- **Stale Frontend Distribution:** Containerized environments using bind mounts often fail to serve newly compiled frontend assets when host build runtimes (Node.js/npm) are absent.
+- **Security Vulnerabilities:** Direct public exposure of databases (port 5432) or running containers as `root` creates severe security exposure.
+- **Lack of Observability:** Difficulty isolating whether latency or failures originate from the edge proxy, application runtime, or database layer.
+
+## 3. Project Objectives
+1. **Containerize Application Stack:** Package the React 18 frontend, Express API, PostgreSQL, and Prometheus using multi-stage Docker builds.
+2. **Automate Continuous Deployment:** Establish a 10-stage GitHub Actions pipeline that builds, tests, scans, publishes, and deploys without manual SSH execution.
+3. **Ensure Reliable Production Ingress:** Configure a hardened Nginx reverse proxy for static caching, rate limiting, and API reverse proxying.
+4. **Prevent Race Conditions:** Implement pessimistic row-level locking (`SELECT ... FOR UPDATE`) and ACID transactions.
+5. **Support Idempotency:** Prevent duplicate billing and stock deduction during network retries using `Idempotency-Key` headers.
+6. **Provide Comprehensive Observability:** Implement liveness (`/health`), readiness (`/health/ready`), and Prometheus telemetry (`/metrics`).
+7. **Ensure Disaster Recovery:** Establish automated database backup, checksum verification, and instant rollback procedures.
+
+## 4. Key Features
+- **Enterprise SaaS Dashboard:** 6 core views (Dashboard KPIs, Products, Orders, Create Order, Inventory Management, System Health).
+- **Indian Rupee (`₹` INR) Localization:** End-to-end currency formatting across all views using `Intl.NumberFormat('en-IN')`.
+- **Zero-Manual-Touch CD:** Automated deployments triggered on push to `main` with automatic rollback on health probe failure.
+- **Decoupled Frontend Asset Sync:** Uses an init sync container (`frontend-sync`) to populate Docker named volumes (`frontend-assets`).
+- **Pessimistic Concurrency Protection:** Zero overselling or negative inventory under heavy concurrent load.
+- **Structured JSON Logging:** Automatic redaction of sensitive authentication tokens (`x-admin-api-key`, `authorization`).
+- **Automated Test Coverage:** 30 unit & integration tests passing 100% with >82% statement coverage.
+
+## 5. Technology Stack
+- **Frontend:** React 18.3, Vite 5.4, React Router v6, Axios, Lucide React, Google Inter.
+- **Backend:** Node.js 20 LTS, Express 4.19, Joi Schema Validation, Helmet, CORS, dumb-init.
+- **Database:** PostgreSQL 16 Alpine, connection pooling (`pg` Pool), ACID transactions.
+- **Reverse Proxy:** Nginx 1.25 Alpine, gzip compression, rate limiting, SSL termination.
+- **DevOps & CI/CD:** Docker, Docker Compose, GitHub Actions, Aqua Security Trivy, Docker Hub.
+- **Cloud Infrastructure:** Amazon Web Services (AWS) EC2 (`t2.micro`, Ubuntu 24.04 LTS, `ap-southeast-2`).
+- **Observability:** Prometheus 2.51, `prom-client`, JSON structured logging.
+
+## 6. System Architecture
+![Architecture Diagram](docs/architecture.png)
+Detailed component specifications and network boundaries are documented in [`docs/architecture.md`](docs/architecture.md).
 
 ```mermaid
 flowchart TD
-    User["Client Web Browser / Postman"]
+    Client["Client Web Browser / API Consumer"]
     
-    subgraph AWS_EC2 ["AWS EC2 Host (Ubuntu 24.04 LTS - 54.252.184.109)"]
-        subgraph Edge_Gateway ["Hardened Nginx Reverse Proxy (Port 80 & 443)"]
-            Nginx["Nginx 1.25 Alpine<br>• Serves React SPA at root (/var/www/html)<br>• Caches /assets/ (max-age 1y, immutable)<br>• Rate Limiting (10 req/s, burst 20)<br>• SSL/TLS Termination Gateway"]
+    subgraph AWS_EC2 ["AWS EC2 Host (54.252.184.109 - Ubuntu 24.04 LTS)"]
+        subgraph Hardened_Proxy ["Edge Reverse Proxy (Port 80 & 443)"]
+            Nginx["Nginx 1.25 Alpine<br>• Serves React SPA (/var/www/html)<br>• Caches /assets/ (1y immutable)<br>• Rate Limiting (10 req/s, burst 20)<br>• Reverse Proxies /api/v1/*"]
         end
-
-        subgraph Docker_Network ["Isolated Docker Bridge Network (ecommerce-backend-net)"]
-            App["Node.js Express App Container (Port 3000)<br>• Multi-stage Node 20 Runtime<br>• Joi Validation & Sanitized Logging<br>• Admin Key Authentication<br>• Unprivileged 'node' User"]
-            Postgres["PostgreSQL 16 Database Container (Port 5432)<br>• Persistent Volume (postgres-prod-data)<br>• Zero Public Host Port Exposure<br>• ACID Transactions & Row Locks"]
-            Prometheus["Prometheus Metrics Container (Port 9090)<br>• Scrapes /metrics every 5s<br>• Stores TSDB Telemetry"]
+        
+        subgraph Docker_Network ["Isolated Bridge Network (ecommerce-backend-net)"]
+            App["Node.js Express API (Port 3000)<br>• Non-root USER node<br>• dumb-init PID 1 supervisor<br>• Joi Validation & Sanitized Logs"]
+            Postgres["PostgreSQL 16 Database (Port 5432)<br>• Persistent Volume (postgres-prod-data)<br>• Zero Public Host Port Exposure<br>• Row-Level Locking (FOR UPDATE)"]
+            Prometheus["Prometheus Metrics (Port 9090)<br>• Scrapes :3000/metrics every 5s<br>• Time-Series TSDB Storage"]
+            Sync["frontend-sync Helper<br>• Extracts /dist to named volume<br>• Eliminates host npm dependency"]
         end
     end
 
-    User -->|HTTP :80 / HTTPS :443| Nginx
-    Nginx -->|Static Assets| Nginx
+    Client -->|HTTP :80 / HTTPS :443| Nginx
     Nginx -->|Proxy Pass /api/v1/*, /health, /ready| App
-    App -->|TCP :5432| Postgres
+    App -->|TCP :5432 (pg Pool)| Postgres
     Prometheus -->|Scrapes :3000/metrics| App
+    Sync -.->|Populates Assets| Nginx
 ```
 
----
-
-## 📂 Repository File Structure
-
+## 7. Project Directory Structure
 ```
 E-Commerce_Platform/
 ├── .github/
@@ -84,286 +129,239 @@ E-Commerce_Platform/
 │       └── ci-cd.yml              # 10-Stage Automated CI/CD Pipeline with Rollback Guard
 ├── database/
 │   ├── schema.sql                 # DDL: products, orders, order_items, audit_logs
-│   └── seed.sql                   # Realistic initial product catalog and audit seed data
+│   └── seed.sql                   # Realistic catalog and audit seed data
+├── docs/                          # Detailed Technical Specifications & Runbooks
+│   ├── architecture.md            # Architecture specifications & network rules
+│   ├── architecture.png           # Architecture diagram
+│   ├── ci-cd-pipeline.md          # CI/CD pipeline documentation
+│   ├── deployment-runbook.md      # AWS EC2 operations runbook
+│   ├── backup-restore.md          # Backup, restore & disaster recovery
+│   ├── monitoring.md              # Health checks, metrics & triage guide
+│   ├── api-documentation.md       # Complete REST API specifications
+│   ├── testing-report.md          # Test suite results & 82% coverage
+│   └── security.md                # Security controls, non-root, least privilege
 ├── frontend/                      # React 18 + Vite Enterprise Admin Dashboard
-│   ├── public/                    # Favicon and static web manifests
 │   ├── src/
-│   │   ├── components/            # Reusable UI widgets (StatCard, StatusBadge, EmptyState, Alerts)
-│   │   ├── layouts/               # DashboardLayout, Sidebar (Deep Navy), Header (Live Status)
-│   │   ├── pages/                 # 6 Core Platform Sections:
-│   │   │   ├── DashboardPage.jsx      # Platform Overview & Executive KPIs (/)
-│   │   │   ├── ProductsPage.jsx       # Product Catalog with Search & Filter (/products)
-│   │   │   ├── OrdersPage.jsx         # Direct UUID Lookup & Session History (/orders)
-│   │   │   ├── CreateOrderPage.jsx    # Checkout with Idempotency Protection (/orders/new)
-│   │   │   ├── InventoryPage.jsx      # Warehouse Stock & Admin Adjustment (/inventory)
-│   │   │   └── SystemHealthPage.jsx   # Live Telemetry & Database Probes (/health)
-│   │   ├── services/              # Axios service layer (api, productService, orderService, healthService)
-│   │   ├── styles/                # Enterprise CSS tokens, 4px-6px radii (index.css, dashboard.css)
-│   │   ├── utils/                 # Indian Rupee (INR) & date formatters (formatters.js)
-│   │   ├── App.jsx                # React Router v6 route configuration
-│   │   └── main.jsx               # Application entrypoint
-│   ├── dist/                      # Compiled production assets mounted to Nginx
-│   ├── package.json               # Frontend dependencies & Vite scripts
-│   └── vite.config.js             # Vite configuration with reverse proxy for development
+│   │   ├── pages/                 # 6 Core Platform Sections
+│   │   ├── components/            # StatCard, StatusBadge, EmptyState, Modals
+│   │   ├── utils/                 # Indian Rupee (INR) & date formatters
+│   │   └── styles/                # Deep Navy enterprise design system
+│   ├── dist/                      # Compiled production assets
+│   ├── package.json               # Frontend dependencies & scripts
+│   └── vite.config.js             # Vite configuration with proxy
 ├── nginx/
-│   ├── nginx.conf                 # Hardened Nginx configuration (SPA fallback, caching, proxy)
-│   └── ssl/                       # SSL/TLS server certificate and private key
+│   ├── nginx.conf                 # Hardened Nginx configuration (SPA fallback, caching)
+│   └── ssl/                       # SSL/TLS certificate configuration
 ├── prometheus/
 │   └── prometheus.yml             # Prometheus scraping targets & intervals
-├── scripts/
+├── scripts/                       # SRE Automation & Verification Scripts
 │   ├── backup.sh                  # Timestamped PostgreSQL backup via pg_dump
 │   ├── restore.sh                 # Database restore utility with safety confirmation
-│   ├── verify-backup-restore.sh   # Automated end-to-end backup/restore testing suite
-│   ├── rollback.sh                # Zero-downtime application container rollback script
-│   ├── failure-test.sh            # SRE controlled outage & recovery validation suite
-│   ├── deploy-ec2.sh              # EC2 automated deployment script
-│   ├── verify-deployment.sh       # Comprehensive post-deployment verification script
-│   ├── init-db.js                 # Database schema migration runner
-│   └── seed-db.js                 # Seed data population runner
+│   ├── verify-backup-restore.sh   # Automated backup/restore validation suite
+│   ├── rollback.sh                # Zero-downtime rollback script
+│   └── failure-test.sh            # Outage simulation & recovery verification
 ├── src/                           # Express Backend REST API Source Code
-│   ├── config/
-│   │   ├── database.js            # PostgreSQL connection pool & health diagnostics
-│   │   └── env.js                 # Environment variable validation & defaults
 │   ├── controllers/               # Route controllers (health, product, order)
-│   ├── middleware/                # Security, auth, error handling, structured logging, validation
-│   ├── routes/                    # Route routers (/health, /api/v1/products, /api/v1/orders, /admin)
-│   ├── services/                  # Business logic, ACID transactions, inventory row locking
-│   ├── utils/                     # Logger, ApiError, Prometheus metrics registry, responses
+│   ├── middleware/                # Security, auth, error handling, logging, validation
+│   ├── routes/                    # Route routers (/health, /api/v1/products, /api/v1/orders)
+│   ├── services/                  # Business logic, ACID transactions, row locking
+│   ├── utils/                     # Logger, ApiError, Prometheus metrics registry
 │   ├── validations/               # Joi request validation schemas
 │   ├── app.js                     # Decoupled Express app definition
 │   └── server.js                  # Production server listener with signal trapping
-├── tests/                         # Automated Unit & Integration Tests (Jest & Supertest)
-│   ├── integration/               # API endpoint integration tests (30 tests)
-│   └── unit/                      # Validation and error utility unit tests
-├── .dockerignore                  # Docker build context exclusions
-├── .env.example                   # Environment variable template
-├── .gitignore                     # Git exclusions
-├── Dockerfile                     # 3-Stage Multi-stage build (Frontend + Dependencies + Runtime)
-├── docker-compose.yml             # Development container orchestration
-├── docker-compose.prod.yml        # Production AWS EC2 orchestration
+├── submission/                    # Internship Assessment Submission Package
+│   ├── project-summary.md         # Executive project summary
+│   ├── implementation-overview.md # Technical decisions & trade-offs
+│   ├── deployment-evidence-checklist.md # Verification commands & pages
+│   ├── demo-script.md             # 3-5 minute video presentation script
+│   └── final-submission-checklist.md    # Deliverables inventory
+├── tests/                         # Automated Unit & Integration Tests (30 Tests)
+├── Dockerfile                     # 3-Stage Multi-stage build (Vite + Dependencies + Runtime)
+├── docker-compose.yml             # Development orchestration (API port 3001)
+├── docker-compose.prod.yml        # Production EC2 orchestration (named volume sync)
+├── FINAL_SUBMISSION_AUDIT.md      # Comprehensive requirement audit matrix
 ├── package.json                   # Backend root package metadata & scripts
-└── README.md                      # Comprehensive project documentation
+└── README.md                      # Complete project documentation
 ```
 
----
+## 8. Application Components
+1. **React SPA Admin Dashboard:** Client interface for inventory monitoring, product management, and checkout.
+2. **Express REST API:** Node.js service managing database queries, input validation, and business logic.
+3. **PostgreSQL Relational DB:** Persistent storage engine with relational tables and row-level locks.
+4. **Nginx Reverse Proxy:** Public ingress point terminating HTTP/HTTPS and routing API traffic.
+5. **Prometheus Telemetry Scraper:** Time-series monitoring daemon collecting application metrics.
+6. **Frontend Asset Synchronizer:** One-shot init container populating Docker named volume `frontend-assets`.
 
-## ☁️ AWS Cloud Infrastructure Specifications
+## 9. Backend API Overview
+All API routes are versioned under `/api/v1` with backward-compatible `/api/*` aliases:
+- `GET /health` – Liveness probe returning application status and uptime.
+- `GET /health/ready` – Readiness probe measuring PostgreSQL connectivity and latency.
+- `GET /metrics` – Prometheus text metrics exporter.
+- `GET /api/v1/products` – Catalog search, filter, and pagination.
+- `GET /api/v1/products/:id` – Detailed product view by UUID.
+- `POST /api/v1/orders` – Checkout with idempotency protection and atomic stock deduction.
+- `GET /api/v1/orders/:id` – Detailed order receipt and line items.
+- `POST /api/v1/admin/products` – Administrative product creation (Protected).
+- `PATCH /api/v1/admin/products/:id/stock` – Administrative stock adjustment (Protected).
 
-The application runs in AWS Cloud following least-privilege security, VPC network isolation, and high performance:
+See [`docs/api-documentation.md`](docs/api-documentation.md) for full request/response schemas.
 
-### 1. EC2 Instance Details
-- **Instance ID:** `i-0a75c310e0f428ad1`
-- **Instance Name:** `ecommerce-api-server`
-- **Instance Type:** `t2.micro` (1 vCPU, 1 GB RAM, AWS Free Tier Eligible)
-- **AMI:** Ubuntu 24.04 LTS (`x86_64`)
-- **Region:** `ap-southeast-2` (Asia Pacific - Sydney)
-- **Public IPv4:** `54.252.184.109`
-- **Private IPv4:** `172.31.33.72`
-- **Storage:** 30 GB gp3 General Purpose SSD root volume
+## 10. Database Design
+PostgreSQL schema is defined in [`database/schema.sql`](database/schema.sql):
+- **`products`**: `id (UUID)`, `sku (VARCHAR)`, `name`, `description`, `price (NUMERIC)`, `currency`, `inventory_count (INT CHECK >= 0)`, `category`, `status`, `created_at`, `updated_at`.
+- **`orders`**: `id (UUID)`, `order_number (VARCHAR)`, `customer_name`, `customer_email`, `total_amount`, `currency`, `status`, `shipping_address`, `idempotency_key (UNIQUE)`, `created_at`, `updated_at`.
+- **`order_items`**: `id (UUID)`, `order_id (FK)`, `product_id (FK)`, `quantity (INT CHECK > 0)`, `unit_price`, `subtotal`, `created_at`.
+- **`audit_logs`**: `id (UUID)`, `entity_type`, `entity_id`, `action`, `actor`, `payload (JSONB)`, `ip_address`, `user_agent`, `created_at`.
 
-### 2. Security Group (`sg-0e054f773dad87b79`)
-Strict inbound firewall rules adhering to least privilege:
+## 11. Business Logic and Validation
+- **Joi Request Validation:** Strict schema validation checks query parameters, UUID formatting, and positive integer quantities before execution reaches controllers.
+- **Centralized Error Handling:** Standardized error envelopes with machine-readable error codes (`RESOURCE_NOT_FOUND`, `INSUFFICIENT_STOCK`, `UNAUTHORIZED`, `VALIDATION_ERROR`).
 
-| Protocol | Port | Source | Description |
-| :--- | :--- | :--- | :--- |
-| **SSH** | `22` | `0.0.0.0/0` (or Admin IP) | Remote administrative access & EC2 Instance Connect |
-| **HTTP** | `80` | `0.0.0.0/0` | Public Nginx entrypoint for React Dashboard & API |
-| **HTTPS** | `443` | `0.0.0.0/0` | Public TLS secure entrypoint |
-| **PostgreSQL** | `5432` | **NONE (Blocked)** | **Zero public access**; internal Docker network only |
-| **Node.js** | `3000` | **NONE (Blocked)** | **Zero public access**; proxied exclusively via Nginx |
+## 12. Idempotent Order Creation
+Clients can safely retry requests by supplying the `Idempotency-Key` header:
+- The database enforces a `UNIQUE` constraint on `orders.idempotency_key`.
+- Upon receiving a duplicate key, `order.service.js` fetches and returns the original order without altering stock or re-charging the customer.
 
----
+## 13. Inventory Management and Stock Protection
+To eliminate race conditions and negative inventory during simultaneous checkouts:
+- Transactions execute within explicit `BEGIN ... COMMIT` blocks.
+- Row-level pessimistic locks are acquired via `SELECT ... FROM products WHERE id = $1 FOR UPDATE`.
+- The database enforces a table-level check constraint `CHECK (inventory_count >= 0)`.
 
-## 🎨 Frontend Architecture & 6 Required Sections
+## 14. Admin Authentication and Audit Logging
+- Administrative routes (`/api/v1/admin/*`) require the `x-admin-api-key` header verified by `middleware/adminAuth.js`.
+- Inventory adjustments and catalog updates record an immutable entry in the `audit_logs` table containing the previous state, new state, and actor IP.
 
-The React Admin Dashboard has been completely audited and redesigned as an enterprise SaaS tool:
+## 15. Docker and Docker Compose Setup
+- **Development (`docker-compose.yml`):** Maps Express API to host port `3001` (`3001:3000`), preserving host port `3000` for developer Grafana dashboards.
+- **Production (`docker-compose.prod.yml`):** Maps Nginx to ports `80` and `443`. Backend (port 3000) and PostgreSQL (port 5432) are internal only. Uses Docker named volume `frontend-assets` populated by `frontend-sync`.
 
-### 1. Dashboard (`/`)
-- **Executive KPI Cards:** Total Products, Total Orders, Total Available Stock, and Cumulative Order Value in INR.
-- **Low Stock Banner:** Highlights items with $\le 10$ units remaining.
-- **Catalog Snapshot:** Table showing active inventory items, SKU, category, and INR prices.
-- **Real-Time Telemetry:** Database response time in ms, pool sockets, and application uptime.
-- **Recent Orders Table:** Session-tracked transactions synchronized with PostgreSQL.
-
-### 2. Product Management (`/products`)
-- **Data Table:** Product Details, Category badge, Price in INR (`₹...`), Stock counts, Status.
-- **Live Search Toolbar:** Search across titles, descriptions, and SKUs.
-- **Category Filter Dropdown:** Dynamically populated from actual database categories.
-- **Product Detail Modal:** Inspects full UUID, detailed descriptions, unit price, and direct checkout link.
-
-### 3. Order Management (`/orders`)
-- **Direct Order Lookup by UUID:** Query `GET /api/v1/orders/:id` directly from PostgreSQL.
-- **Order Details Breakdown:** Customer name, email, shipping address, total in INR, and itemized lines with unit prices.
-- **Session History:** Track newly created orders with timestamp and idempotent replay verification badges.
-
-### 4. Create Order (`/orders/new`)
-- **Catalog Selector:** Choose products with live inventory availability.
-- **Stock Validation:** Client and server validation preventing orders exceeding available stock.
-- **Estimated Subtotal Card:** Dynamically computes total in INR (backend remains authoritative).
-- **Idempotency Protection:** Generates unique `Idempotency-Key` headers to ensure safe network retries without double-charging or double-deducting stock.
-
-### 5. Inventory Management (`/inventory`)
-- **Warehouse Metrics:** Total Available Stock, Cumulative Inventory Valuation in INR, and Items Requiring Attention.
-- **Stock Level Table:** Live view of SKU, unit price, current inventory, and last updated timestamps.
-- **Admin Stock Adjustment Modal:** Protected feature calling `PATCH /api/v1/admin/products/:id/stock` with `x-admin-api-key` authentication to adjust inventory directly.
-
-### 6. System Health (`/health`)
-- **Service Probes:** Real-time polling of Express `/health` (liveness) and PostgreSQL `/ready` (readiness).
-- **Database Telemetry:** SQL ping latency (response time), connection pool sockets (total, idle, waiting).
-- **Process Memory Footprint:** V8 Heap Allocated, Heap Actually Used, and Resident Set Size (RSS).
-- **Prometheus Telemetry:** Metric scraping documentation and status.
-
----
-
-## 💰 Currency Standard — Indian Rupees (INR)
-
-All financial data, unit prices, product valuations, and order subtotals are formatted in Indian Rupees using the Indian numbering system:
-
-```javascript
-// frontend/src/utils/formatters.js
-export const inrFormatter = new Intl.NumberFormat('en-IN', {
-  style: 'currency',
-  currency: 'INR',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-export const formatINR = (amount) => {
-  if (amount === null || amount === undefined || isNaN(Number(amount))) {
-    return '₹0.00';
-  }
-  return inrFormatter.format(Number(amount));
-};
+## 16. Environment Variables and Configuration
+Managed via [`.env.example`](.env.example) template:
+```env
+NODE_ENV=production
+PORT=3000
+API_PREFIX=/api/v1
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=ecommerce_prod
+DB_USER=postgres
+DB_PASSWORD=<SECURE_DATABASE_PASSWORD>
+ADMIN_API_KEY=<SECURE_ADMIN_API_KEY>
+APP_IMAGE=abhishekdixitt18/ecommerce-cloud-devops:latest
 ```
 
-**Formatting Examples:**
-- Product Price: `₹1,899.99`
-- Order Total: `₹12,500.00`
-- Inventory Valuation: `₹12,50,000.00`
+## 17. Local Installation and Execution
 
----
-
-## 🔄 Automated CI/CD Pipeline (GitHub Actions)
-
-The workflow defined in [`.github/workflows/ci-cd.yml`](file:///c:/Users/Asus/OneDrive/Desktop/E_Commerce%20Platform/.github/workflows/ci-cd.yml) executes 10 progressive stages on every push to `main`:
-
-```mermaid
-flowchart LR
-    S1[Stage 1: Checkout] --> S2[Stage 2: Dependencies]
-    S2 --> S3[Stage 3: Code Quality & Vite Build]
-    S3 --> S4[Stage 4: Automated Testing with Postgres]
-    S4 --> S5[Stage 5: Multi-Stage Docker Build]
-    S5 --> S6[Stage 6: Trivy Security Scan]
-    S6 --> S7[Stage 7: Image Tagging]
-    S7 --> S8[Stage 8: Docker Hub Push]
-    S8 --> S9[Stage 9: EC2 Deployment & Rollback Guard]
-    S9 --> S10[Stage 10: Live Health Verification]
-```
-
-### Automated Rollback Mechanism
-Stage 9 takes an automated snapshot of the active image before deploying:
 ```bash
-PREV_IMAGE=$(sudo docker inspect --format='{{.Image}}' ecommerce-api-prod 2>/dev/null || echo "")
-```
-If health verification fails after recreation, the pipeline triggers an immediate automatic rollback to `PREV_IMAGE`, alerts the team, and preserves persistent database records.
-
----
-
-## 🚀 Development & Testing Setup
-
-### Prerequisites
-- Node.js >= 20.x
-- Docker Engine & Docker Compose
-- PostgreSQL (optional if running via Docker)
-
-### 1. Clone & Install Dependencies
-```bash
+# 1. Clone repository
 git clone https://github.com/AbhishekDixitt18/E-Commerce_Platform.git
 cd E-Commerce_Platform
 
-# Install backend dependencies
+# 2. Install dependencies
 npm install
-
-# Install frontend dependencies
 cd frontend && npm install && cd ..
-```
 
-### 2. Configure Environment Variables
-```bash
+# 3. Configure environment
 cp .env.example .env
-```
 
-### 3. Start Stack via Docker Compose
-```bash
-# Starts Postgres (5432), Express API (3001), and Prometheus (9090)
+# 4. Start backend stack (PostgreSQL :5432, Express API :3001, Prometheus :9090)
+# Port 3000 remains free for your local Grafana instance
 docker compose up -d --build
-```
 
-### 4. Start React Frontend Dev Server
-```bash
+# 5. Start React frontend dev server (with HMR)
 cd frontend
 npm run dev
-```
+# Vite runs at http://localhost:5173/ (proxies /api to localhost:3001)
 
-### 5. Run Automated Tests
-```bash
-# Run unit & integration tests (30 tests)
+# 6. Run automated test suite (30 tests)
 npm test
-
-# Run tests with coverage report (>82% statement coverage)
 npm run test:coverage
 ```
 
----
+## 18. Automated CI/CD Pipeline
+The workflow defined in [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) executes 10 stages:
+1. `Checkout`: Fetches commit SHA via `actions/checkout@v4`.
+2. `Dependencies`: Installs backend and frontend dependencies via `npm ci`.
+3. `Code Quality`: Runs ESLint and validates production Vite build.
+4. `Automated Testing`: Runs 30 tests against an isolated PostgreSQL container.
+5. `Docker Build`: Builds multi-stage Docker image and archives artifact.
+6. `Security Scanning`: Trivy scans container for CRITICAL/HIGH vulnerabilities.
+7. `Image Tagging`: Tags with commit SHA (`sha-${GITHUB_SHA}`) and `latest`.
+8. `Registry Push`: Pushes verified image to Docker Hub.
+9. `Automated EC2 Deploy`: Connects via SSH, updates `frontend-assets` named volume, restarts containers, and verifies health with automated rollback guard.
+10. `Production Verification`: Validates public endpoints on `http://54.252.184.109/`.
 
-## ☁️ Production EC2 Deployment Commands
+See [`docs/ci-cd-pipeline.md`](docs/ci-cd-pipeline.md) for full details.
 
-To deploy or update the stack directly on the AWS EC2 instance:
+## 19. Docker Image Build and Registry Push
+- Image Registry: `https://hub.docker.com/r/abhishekdixitt18/ecommerce-cloud-devops`
+- Images are built from multi-stage [Dockerfile](Dockerfile) and tagged immutably with the Git commit SHA.
 
-```bash
-# Connect to the EC2 Instance via SSH or EC2 Instance Connect
-ssh -i your-key.pem ubuntu@54.252.184.109
+## 20. AWS EC2 Deployment Architecture
+- **Instance:** `i-0a75c310e0f428ad1` (`t2.micro`, 1 vCPU, 1 GB RAM, 30 GB gp3 SSD).
+- **Public IP:** `54.252.184.109` | **Region:** `ap-southeast-2` (Sydney).
+- **Security Group:** Inbound ports 80, 443, 22. Ports 5432 and 3000 are blocked.
 
-# Navigate to project directory
-cd ~/E-Commerce_Platform
+## 21. Nginx Reverse Proxy Configuration
+Defined in [`nginx/nginx.conf`](nginx/nginx.conf):
+- Root path `/` serves React SPA with `try_files $uri $uri/ /index.html;`.
+- Immutable static caching for `/assets/` (`max-age=31536000, immutable`).
+- Reverse proxies `/api/v1/*`, `/health`, `/health/ready`, and `/metrics` to `backend_app`.
+- Enforces rate limiting: 10 req/s, burst 20.
 
-# Pull the latest commits from main
-git pull origin main
+## 22. Frontend Deployment
+Frontend static assets are built inside Stage 1 of the multi-stage Dockerfile and extracted to the Docker named volume `frontend-assets` during deployment via `frontend-sync`. This guarantees zero dependency on host build tools.
 
-# Safely recreate containers without deleting persistent database volumes
-sudo docker compose -f docker-compose.prod.yml down --remove-orphans
-sudo docker compose -f docker-compose.prod.yml up -d --build
+## 23. Monitoring and Observability
+- **Prometheus UI:** Accessible at `http://54.252.184.109:9090`.
+- **Metrics Collected:** Request duration histograms, HTTP status counters, active connection pool counts.
+- See [`docs/monitoring.md`](docs/monitoring.md) for diagnostic triage workflows.
 
-# Verify container statuses
-sudo docker compose -f docker-compose.prod.yml ps
+## 24. Health Checks and Readiness
+- **Liveness:** `http://54.252.184.109/health` (HTTP 200 `UP`).
+- **Readiness:** `http://54.252.184.109/health/ready` (Verifies PostgreSQL connection and query latency).
 
-# Verify endpoints
-curl -I http://127.0.0.1/
-curl -I http://127.0.0.1/health
-curl -s http://127.0.0.1/api/v1/products | head -n 20
-```
+## 25. Logging and Troubleshooting
+- **Application Logs:** Structured JSON logs via `docker logs -f ecommerce-api-prod`.
+- **Nginx Logs:** Ingress access logs via `docker logs -f ecommerce-nginx-prod`.
+- **Database Logs:** `docker logs --tail 100 ecommerce-postgres-prod`.
 
----
+## 26. Database Backup and Restore
+- **Backup Script:** [`scripts/backup.sh`](scripts/backup.sh) generates timestamped, compressed `.sql.gz` backups with SHA256 checksums and `0600` permissions.
+- **Restore Script:** [`scripts/restore.sh`](scripts/restore.sh) enforces safety confirmation (`--confirm-production`) and creates pre-restore safety snapshots.
+- **Automated Verification:** [`scripts/verify-backup-restore.sh`](scripts/verify-backup-restore.sh).
+- See [`docs/backup-restore.md`](docs/backup-restore.md).
 
-## 💾 Database Reliability: Backup & Restore
+## 27. Deployment Rollback and Recovery
+- In-pipeline automated rollback restores `PREV_IMAGE` if health checks fail.
+- Manual one-command rollback script: [`scripts/rollback.sh`](scripts/rollback.sh).
 
-### Create Automated Backup
-```bash
-sudo ./scripts/backup.sh
-# Creates timestamped, gzip-compressed backup in backups/
-```
+## 28. Security Practices
+- **Non-Root User:** Runs as `USER node` (UID 1000).
+- **Network Isolation:** Internal ports 5432 and 3000 are not publicly bound.
+- **Sanitized Logging:** Authorization and admin keys are scrubbed before logging.
+- **Joi Validation:** Rejects malformed payloads before database queries.
+- See [`docs/security.md`](docs/security.md).
 
-### Restore Database
-```bash
-# Safe test restore into isolated sandbox (ecommerce_restore_test)
-sudo ./scripts/restore.sh backups/<BACKUP_FILE>.sql.gz
+## 29. Testing and Validation
+- **Unit & Integration Suite:** 30 Jest & Supertest tests passing 100%.
+- **Coverage:** 82.12% statement coverage, 83.45% line coverage.
+- See [`docs/testing-report.md`](docs/testing-report.md).
 
-# Production restore (requires explicit confirmation flag)
-sudo ./scripts/restore.sh backups/<BACKUP_FILE>.sql.gz ecommerce_prod --confirm-production
-```
+## 30. Known Limitations
+1. **IP-Based Access:** Server is accessed via public IPv4 (`http://54.252.184.109/`). Full commercial HTTPS requires an associated domain name (FQDN).
+2. **Single Host Deployment:** The stack runs on a single `t2.micro` EC2 instance. Multi-region redundancy or AWS RDS managed database would be recommended for global high-traffic enterprise scaling.
 
----
+## 31. Future Enhancements
+- Attach custom domain with AWS Route 53 and Let's Encrypt automated TLS renewal.
+- Migrate database layer to Amazon Aurora / RDS with Multi-AZ replication.
+- Implement Redis distributed caching for catalog read acceleration.
+- Introduce Kubernetes (EKS) orchestration for auto-scaling under peak traffic.
 
-## 🛡️ License & Assessment Compliance
-
-This repository satisfies all technical specifications, SRE observability requirements, and UI/UX design standards outlined in the **ALGIONS AI LABS PRIVATE LIMITED** Cloud Deployment & CI/CD Assessment document. All proprietary rights reserved.
+## 32. Author and Internship Information
+- **Candidate / Author:** Abhishek Dixit
+- **Internship Assessment:** Cloud Deployment & CI/CD Technical Assessment
+- **Company:** ALGIONS AI LABS PRIVATE LIMITED
+- **Date of Completion:** November 2026
+- **Repository:** [https://github.com/AbhishekDixitt18/E-Commerce_Platform.git](https://github.com/AbhishekDixitt18/E-Commerce_Platform.git)
