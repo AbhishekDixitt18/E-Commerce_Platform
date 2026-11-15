@@ -220,3 +220,106 @@ npm run test:coverage
 - SQL injection prevention via PostgreSQL parameterized queries (`$1, $2, ...`).
 - Input validation enforced at the middleware layer via Joi.
 - Non-root user execution inside Docker container (`USER node`).
+
+
+---
+
+## ☁️ AWS EC2 Production Deployment Guide
+
+This guide details the step-by-step procedure for deploying the E-Commerce Platform on an Ubuntu-based AWS EC2 instance following production-grade security, isolation, and observability standards.
+
+### 1. EC2 Instance & Architecture Specifications
+
+| Parameter | Recommended Production Value | Justification |
+| :--- | :--- | :--- |
+| **Instance Type** | `t2.micro` (or `t3.micro` where available) | **AWS Free Tier eligible** (1 vCPU, 1 GB RAM, sufficient for Node.js Alpine + PostgreSQL) |
+| **Operating System** | **Ubuntu 24.04 LTS** (Noble Numbat) or **22.04 LTS** | Long Term Support, stable kernel, verified Docker Engine support |
+| **Storage (EBS)** | 30 GB gp3 / gp2 root volume | Free-tier eligible (up to 30 GB EBS), ample space for Docker images and DB volume |
+| **Network & VPC** | Default VPC or Custom Public Subnet | Auto-assign public IPv4 enabled |
+
+### 2. Security Group Configuration (Least Privilege)
+
+Create a dedicated Security Group (e.g., `ecommerce-api-sg`) with minimal required inbound rules:
+
+| Type | Protocol | Port Range | Source | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **SSH** | TCP | `22` | `YOUR_PUBLIC_IP/32` | **Restricted SSH access** (Admins only, never 0.0.0.0/0) |
+| **HTTP** | TCP | `80` | `0.0.0.0/0` | Public API & Nginx Reverse Proxy traffic |
+| **HTTPS** | TCP | `443` | `0.0.0.0/0` | Secure SSL/TLS web traffic |
+
+> [!CAUTION]
+> **PostgreSQL (Port 5432)** and internal **Node.js (Port 3000)** must **NEVER** be open in the AWS Security Group. They communicate strictly over the internal isolated Docker bridge network (`ecommerce-backend-net`).
+
+### 3. Step-by-Step Server Setup & Deployment
+
+#### Step 1: Connect to the EC2 Instance via SSH
+```bash
+chmod 400 your-key.pem
+ssh -i your-key.pem ubuntu@<EC2_PUBLIC_IPV4_ADDRESS>
+```
+
+#### Step 2: Clone the Project Repository
+```bash
+# Clone the repository
+git clone https://github.com/AbhishekDixitt18/E-Commerce_Platform.git
+cd E-Commerce_Platform
+```
+
+#### Step 3: Run the Automated Deployment Script
+```bash
+# Grant execution permissions
+chmod +x scripts/deploy-ec2.sh scripts/verify-deployment.sh
+
+# Run automated deployment
+./scripts/deploy-ec2.sh
+```
+The automated script will:
+1. Install Docker Engine and the Docker Compose plugin from official Docker APT repositories.
+2. Add the `ubuntu` user to the `docker` group.
+3. Generate a secure, production `.env` file with cryptographically random database passwords and admin API keys.
+4. Launch the multi-container stack (`nginx`, `app`, `postgres`) via `docker-compose.prod.yml`.
+5. Wait for container health checks to pass.
+6. Automatically run the verification suite.
+
+#### Manual Alternative (Step-by-Step):
+```bash
+# 1. Update and install Docker
+sudo apt-get update -y
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update -y
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo usermod -aG docker $USER
+
+# 2. Configure Environment Variables
+cp .env.example .env
+nano .env  # Populate DB_PASSWORD and ADMIN_API_KEY with strong secrets
+
+# 3. Deploy via Docker Compose
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 4. Inspect container health
+docker compose -f docker-compose.prod.yml ps
+```
+
+### 4. Post-Deployment Verification & Evidence
+
+Run the automated verification script to validate all endpoints, transactions, and security barriers:
+
+```bash
+./scripts/verify-deployment.sh "http://<EC2_PUBLIC_IP>"
+```
+
+Expected verification output:
+- `[PASS] Docker Container Orchestration | Expected: api & postgres running | Actual: Containers active`
+- `[PASS] Liveness Probe (GET /health) | Expected: HTTP 200 | Actual: HTTP 200`
+- `[PASS] Readiness Probe (GET /ready) | Expected: HTTP 200 (DB connected) | Actual: HTTP 200`
+- `[PASS] Product Catalog (GET /api/v1/products) | Expected: HTTP 200 | Actual: HTTP 200`
+- `[PASS] Product Detail (GET /api/v1/products/:id) | Expected: HTTP 200 | Actual: HTTP 200`
+- `[PASS] Create Order (POST /api/v1/orders) | Expected: HTTP 201 | Actual: HTTP 201`
+- `[PASS] Order Idempotency Guard | Expected: HTTP 200 (Existing Order) | Actual: HTTP 200`
+- `[PASS] Admin Route Protection (No Key) | Expected: HTTP 401 Unauthorized | Actual: HTTP 401`
+- `[PASS] Admin Product Creation & Audit (With Key) | Expected: HTTP 201 Created | Actual: HTTP 201`
