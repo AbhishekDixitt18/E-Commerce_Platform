@@ -94,11 +94,17 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME || 'abhishekdixit18' }}/ecommerce-cloud-devops
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_USERNAME || 'abhishekdixitt18' }}/ecommerce-cloud-devops
           tags: |
             type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch
+
+      - name: Display Generated Version Tags
+        run: |
+          echo "Generated tags from commit SHA:"
+          echo "${{ steps.meta.outputs.tags }}"
 
       - name: Stage 5 - Build Application Docker Image
         uses: docker/build-push-action@v5
@@ -110,7 +116,7 @@ jobs:
           cache-from: type=gha
 
       - name: Stage 6 - Run Trivy Security Vulnerability Scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: 'ecommerce-api:${{ github.sha }}'
           format: 'table'
@@ -119,15 +125,18 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-      - name: Check for Docker Hub Secrets
+      - name: Check Docker Hub Credentials
         id: docker_secrets
+        env:
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+          if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_TOKEN" ]; then
             echo "configured=true" >> $GITHUB_OUTPUT
-            echo "Docker Hub credentials detected."
+            echo "Docker Hub credentials are fully configured."
           else
             echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::warning ::Docker Hub secrets (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN) are not configured. Image push stage will be skipped until secrets are added in repository settings."
+            echo "::warning ::Docker Hub secrets (DOCKERHUB_USERNAME and DOCKERHUB_TOKEN) are not configured in repository settings. Image push stage will be skipped until secrets are configured. Image building and Trivy vulnerability scanning completed successfully."
           fi
 
       - name: Log in to Docker Hub
