@@ -229,7 +229,13 @@
 .btn-refresh:hover:not(:disabled) {
   background-color: #f8fafc;
   color: var(--text-main);
-  border-color: #cbd5e1;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.btn-refresh:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-refresh:disabled {
@@ -275,7 +281,7 @@
   color: var(--text-muted);
 }
 
-/* Cards & Grid Styles */
+/* Cards & Grid Styles with Attractive Hover Elevation */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -292,12 +298,18 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  cursor: default;
 }
 
 .stat-card:hover {
-  box-shadow: var(--shadow-sm);
-  border-color: #cbd5e1;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px -3px rgba(37, 99, 235, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+  border-color: #93c5fd;
+}
+
+.stat-card:hover .stat-icon-wrapper {
+  transform: scale(1.08);
 }
 
 .stat-label {
@@ -323,13 +335,14 @@
 }
 
 .stat-icon-wrapper {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform var(--transition-normal);
 }
 
 .stat-icon-wrapper.blue {
@@ -352,7 +365,7 @@
   color: #7e22ce;
 }
 
-/* Dashboard Section Card */
+/* Dashboard Section Card with Hover Polish */
 .dashboard-card {
   background-color: var(--surface);
   border: 1px solid var(--border-light);
@@ -360,6 +373,26 @@
   box-shadow: var(--shadow-xs);
   margin-bottom: 1.5rem;
   overflow: hidden;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.06);
+  border-color: #cbd5e1;
+}
+
+/* Specific Attractive Price Badge (INR Currency Styling) */
+.price-inr {
+  font-family: var(--font-family);
+  font-weight: 700;
+  color: var(--success);
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.price-inr.primary {
+  color: var(--primary-navy);
 }
 
 .card-header {
@@ -408,15 +441,23 @@
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-light);
   color: var(--text-main);
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .data-table tr:last-child td {
   border-bottom: none;
 }
 
-.data-table tr:hover td {
-  background-color: #f8fafc;
+.data-table tbody tr {
+  transition: all var(--transition-fast);
+}
+
+.data-table tbody tr:hover td {
+  background-color: #f1f5f9;
+}
+
+.data-table tbody tr:hover {
+  box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
 /* Professional Rectangular Badges (No Pill Bloat) */
@@ -497,7 +538,7 @@
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
-/* Buttons */
+/* Buttons with Smooth Hover Elevation */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -508,12 +549,17 @@
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 600;
-  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .btn-primary:hover:not(:disabled) {
   background-color: var(--accent-blue-hover);
-  box-shadow: 0 1px 3px 0 rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-primary:disabled {

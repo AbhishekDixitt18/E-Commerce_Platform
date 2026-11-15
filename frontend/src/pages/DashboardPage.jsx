@@ -192,7 +192,7 @@ export default function DashboardPage() {
                         <div style={{ fontSize: '0.725rem', color: '#64748b' }}>{p.sku}</div>
                       </td>
                       <td>{p.category}</td>
-                      <td style={{ fontWeight: 600 }}>{formatINR(p.price)}</td>
+                      <td className="price-inr">{formatINR(p.price)}</td>
                       <td>
                         <span
                           style={{
@@ -302,7 +302,7 @@ export default function DashboardPage() {
                       <div style={{ fontWeight: 500 }}>{order.customer_name || order.customerName}</div>
                       <div style={{ fontSize: '0.725rem', color: '#64748b' }}>{order.customer_email || order.customerEmail}</div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>
+                    <td className="price-inr">
                       {formatINR(order.total_amount || order.total || 0)}
                     </td>
                     <td>

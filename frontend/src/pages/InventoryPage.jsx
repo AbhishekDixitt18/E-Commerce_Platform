@@ -193,7 +193,7 @@ export default function InventoryPage() {
                       <td>
                         <code>{p.sku}</code>
                       </td>
-                      <td>{formatINR(p.price)}</td>
+                      <td className="price-inr">{formatINR(p.price)}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                           <span
@@ -207,7 +207,7 @@ export default function InventoryPage() {
                           <span style={{ fontSize: '0.725rem', color: '#64748B' }}>units</span>
                         </div>
                       </td>
-                      <td style={{ fontWeight: 600 }}>{formatINR(itemVal)}</td>
+                      <td className="price-inr">{formatINR(itemVal)}</td>
                       <td>
                         <StatusBadge status={isOut ? 'OUT_OF_STOCK' : isLow ? 'LOW_STOCK' : 'ACTIVE'} />
                       </td>

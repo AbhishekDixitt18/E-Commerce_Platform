@@ -203,7 +203,7 @@ export default function ProductsPage() {
                           <Tag size={11} /> {p.category}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                      <td className="price-inr" style={{ fontSize: '0.9rem' }}>
                         {formatINR(p.price)}
                       </td>
                       <td>
@@ -290,7 +290,7 @@ export default function ProductsPage() {
                 </div>
                 <div className="metric-row">
                   <span className="metric-label">Unit Price:</span>
-                  <span className="metric-val" style={{ color: '#15803D', fontWeight: 700 }}>
+                  <span className="metric-val price-inr">
                     {formatINR(selectedProduct.price)}
                   </span>
                 </div>

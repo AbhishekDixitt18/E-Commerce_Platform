@@ -176,7 +176,7 @@ export default function OrdersPage() {
                   <div style={{ fontSize: '0.725rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <CreditCard size={12} /> Total Amount (INR)
                   </div>
-                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#15803D' }}>
+                  <div className="price-inr" style={{ fontSize: '1.15rem' }}>
                     {formatINR(lookupResult.order?.total_amount || lookupResult.order?.total || 0)}
                   </div>
                 </div>
@@ -213,8 +213,8 @@ export default function OrdersPage() {
                             {item.title || item.name || item.product_id || item.productId}
                           </td>
                           <td style={{ fontWeight: 600 }}>{item.quantity}</td>
-                          <td>{formatINR(item.unit_price || item.unitPrice || 0)}</td>
-                          <td style={{ fontWeight: 600 }}>
+                          <td className="price-inr">{formatINR(item.unit_price || item.unitPrice || 0)}</td>
+                          <td className="price-inr">
                             {formatINR(item.subtotal || item.quantity * (item.unit_price || 0))}
                           </td>
                         </tr>
@@ -272,7 +272,7 @@ export default function OrdersPage() {
                       <div style={{ fontWeight: 500 }}>{ord.customer_name || ord.customerName}</div>
                       <div style={{ fontSize: '0.725rem', color: '#64748B' }}>{ord.customer_email || ord.customerEmail}</div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>
+                    <td className="price-inr">
                       {formatINR(ord.total_amount || ord.total || 0)}
                     </td>
                     <td>
