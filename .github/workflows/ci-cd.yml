@@ -327,13 +327,16 @@ jobs:
           done < /tmp/docker-meta/tags.txt
 
   # =============================================================================
-  # STAGE 9: EC2 PRODUCTION DEPLOYMENT
+  # STAGE 9: EC2 PRODUCTION DEPLOYMENT & AUTOMATED ROLLBACK
   # =============================================================================
   stage-9-ec2-deployment:
-    name: 'Stage 9: EC2 Deployment'
+    name: 'Stage 9: EC2 Deployment & Rollback Safety'
     needs: [stage-7-image-tagging, stage-8-image-push]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    concurrency:
+      group: ec2-production-deployment
+      cancel-in-progress: false
     steps:
       - name: Check EC2 Deployment Credentials
         id: ec2_secrets
@@ -346,10 +349,10 @@ jobs:
             echo "EC2 SSH deployment credentials configured."
           else
             echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::notice ::EC2 SSH deployment secrets (EC2_SSH_KEY, EC2_HOST) not configured. Direct terminal deployment on EC2 instance is used."
+            echo "::notice ::EC2 SSH deployment secrets (EC2_SSH_KEY, EC2_HOST) not configured in GitHub Secrets. Direct SSH deployment skipped; can be deployed via EC2 Instance Connect."
           fi
 
-      - name: Deploy to AWS EC2 via SSH
+      - name: Deploy to AWS EC2 via SSH with Rollback Guard
         if: steps.ec2_secrets.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -359,44 +362,120 @@ jobs:
           port: 22
           script: |
             set -e
-            echo "=== Starting EC2 Production Deployment ==="
-            cd ~/E-Commerce_Platform 2>/dev/null || cd ~/ecommerce-cloud-devops 2>/dev/null || cd ~/*Commerce* 2>/dev/null
+            echo "=========================================="
+            echo "Starting Safe EC2 Continuous Deployment"
+            echo "Commit SHA: ${{ github.sha }}"
+            echo "=========================================="
+
+            # Locate project directory
+            REPO_DIR="$HOME/E-Commerce_Platform"
+            [ -d "$REPO_DIR" ] || REPO_DIR="$HOME/ecommerce-cloud-devops"
+            [ -d "$REPO_DIR" ] || REPO_DIR="$(find ~ -maxdepth 2 -name '.git' -exec dirname {} \; | head -n 1)"
+            cd "$REPO_DIR"
+
+            # 1. Capture current running application image for rollback protection
+            PREV_IMAGE=$(sudo docker inspect --format='{{.Image}}' ecommerce-api-prod 2>/dev/null || echo "")
+            echo "Previous working image for rollback protection: $PREV_IMAGE"
+
+            # 2. Pull latest verified repository updates (force sync to main branch)
             git fetch origin main
-            git checkout main
+            git reset --hard origin/main
             git pull origin main
-            sudo docker compose -f docker-compose.prod.yml down --remove-orphans
-            sudo docker compose -f docker-compose.prod.yml up -d --build
-            echo "=== Deployment Completed ==="
+
+            # 3. Pull or build verified application container
+            IMAGE_REPO="${{ secrets.DOCKERHUB_USERNAME || 'abhishekdixitt18' }}/ecommerce-cloud-devops"
+            TARGET_IMAGE="${IMAGE_REPO}:sha-${{ github.sha }}"
+            
+            if sudo docker pull "$TARGET_IMAGE" 2>/dev/null; then
+              echo "Pulled pre-built image from registry: $TARGET_IMAGE"
+              export APP_IMAGE="$TARGET_IMAGE"
+            else
+              echo "Building application container locally from multi-stage Dockerfile..."
+              sudo docker compose -f docker-compose.prod.yml build app
+            fi
+
+            # 4. Safely update application and reverse proxy (preserves postgres-prod-data volume)
+            sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans app nginx
+
+            # 5. Immediate internal health verification with retry loop
+            echo "Performing local deployment health checks..."
+            HEALTH_PASSED=false
+            for i in {1..12}; do
+              if curl -sf http://127.0.0.1/health > /dev/null && curl -sf http://127.0.0.1/health/ready > /dev/null; then
+                echo "Health verification succeeded on attempt $i!"
+                HEALTH_PASSED=true
+                break
+              fi
+              echo "Waiting for application to become healthy (attempt $i/12)..."
+              sleep 5
+            done
+
+            # 6. Automatic Rollback on failure
+            if [ "$HEALTH_PASSED" != "true" ]; then
+              echo "::error ::Deployment health verification failed! Triggering automatic rollback..."
+              if [ -n "$PREV_IMAGE" ]; then
+                echo "Restoring previous working container image ($PREV_IMAGE)..."
+                sudo docker tag "$PREV_IMAGE" "${IMAGE_REPO}:rollback-active"
+                export APP_IMAGE="${IMAGE_REPO}:rollback-active"
+                sudo docker compose -f docker-compose.prod.yml up -d app
+              else
+                echo "Reverting commit and rebuilding previous working release..."
+                git checkout HEAD~1
+                sudo docker compose -f docker-compose.prod.yml up -d --build app
+              fi
+              echo "Rollback completed. Exiting with failure."
+              exit 1
+            fi
+
+            echo "=== Continuous Deployment Successfully Completed ==="
 
   # =============================================================================
-  # STAGE 10: POST-DEPLOYMENT HEALTH VERIFICATION
+  # STAGE 10: POST-DEPLOYMENT VERIFICATION (FRONTEND + BACKEND)
   # =============================================================================
   stage-10-health-verification:
-    name: 'Stage 10: Health Verification'
+    name: 'Stage 10: Production Verification'
     needs: stage-9-ec2-deployment
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Live Production Endpoints
+      - name: Verify Live Production Services
         env:
           EC2_HOST: ${{ secrets.EC2_HOST || '54.252.184.109' }}
         run: |
           echo "=========================================="
-          echo "Verifying EC2 Production Deployment at http://${EC2_HOST}/"
+          echo "Verifying Live Production Endpoints at http://${EC2_HOST}/"
           echo "=========================================="
           
+          # Retry loop up to 60 seconds
           for i in {1..12}; do
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/health" || echo "000")
-            echo "Attempt $i: /health responded with HTTP ${HTTP_STATUS}"
+            echo "Attempt $i: /health returned HTTP ${HTTP_STATUS}"
             if [ "$HTTP_STATUS" = "200" ]; then
-              echo "Health check passed!"
+              echo "Backend health check passed!"
               break
             fi
             sleep 5
           done
 
-          ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/" || echo "000")
-          echo "Root dashboard responded with HTTP ${ROOT_STATUS}"
-          
-          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/ready" || echo "000")
-          echo "Readiness probe responded with HTTP ${READY_STATUS}"
+          # Verify React Frontend Dashboard
+          echo "Verifying React Frontend root (/)..."
+          ROOT_HTML=$(curl -sL --connect-timeout 5 "http://${EC2_HOST}/" || echo "")
+          if echo "$ROOT_HTML" | grep -q '<div id="root">'; then
+            echo "SUCCESS: React Dashboard HTML verified (<div id=\"root\"> detected)."
+          else
+            echo "::warning ::React root container not detected on http://${EC2_HOST}/. Verify Nginx volume mount."
+          fi
+
+          # Verify Database Readiness
+          echo "Verifying Database Readiness (/health/ready)..."
+          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/health/ready" || echo "000")
+          echo "Readiness probe returned HTTP ${READY_STATUS}"
+
+          # Verify Products API through Nginx reverse proxy
+          echo "Verifying Products REST API (/api/v1/products)..."
+          API_RES=$(curl -sL --connect-timeout 5 "http://${EC2_HOST}/api/v1/products" || echo "{}")
+          if echo "$API_RES" | grep -q '"success":true'; then
+            echo "SUCCESS: Products API responding through Nginx reverse proxy."
+          else
+            echo "::warning ::Products API response did not match expected structure."
+          fi
