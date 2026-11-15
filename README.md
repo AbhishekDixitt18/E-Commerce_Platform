@@ -323,3 +323,131 @@ Expected verification output:
 - `[PASS] Order Idempotency Guard | Expected: HTTP 200 (Existing Order) | Actual: HTTP 200`
 - `[PASS] Admin Route Protection (No Key) | Expected: HTTP 401 Unauthorized | Actual: HTTP 401`
 - `[PASS] Admin Product Creation & Audit (With Key) | Expected: HTTP 201 Created | Actual: HTTP 201`
+
+
+---
+
+## 🛡️ Nginx Reverse Proxy & HTTPS Architecture
+
+The production deployment utilizes **Nginx (v1.25 Alpine)** as a hardened, high-performance reverse proxy and TLS termination gateway fronting the Node.js Express backend and PostgreSQL database.
+
+```mermaid
+flowchart TD
+    Client["Client / Browser / Postman"]
+    
+    subgraph Edge ["Public Gateway"]
+        Nginx["Nginx Reverse Proxy & TLS (Port 80 & 443)<br>• Rate Limiting (10r/s, burst 20)<br>• HTTP to HTTPS 301 Redirect<br>• Request Size Limits (10MB)<br>• Security Headers (HSTS, CSP, X-Frame)<br>• Sanitized Access Logging"]
+    end
+
+    subgraph InternalNet ["Isolated Docker Network (ecommerce-backend-net)"]
+        direction TB
+        App["Node.js Express App Container (Port 3000)<br>• Non-root user 'node'<br>• Joi Validation & Error Handling<br>• Admin Key Authentication"]
+        Postgres["PostgreSQL Database Container (Port 5432)<br>• Named Volume (postgres-prod-data)<br>• Zero Public Inbound Exposure"]
+    end
+
+    Client -->|HTTP :80 / HTTPS :443| Nginx
+    Nginx -->|Proxy Pass :3000| App
+    App -->|Internal TCP :5432| Postgres
+```
+
+### 1. Reverse Proxy & Security Features
+
+- **Port Isolation**: The Node.js application container (`app:3000`) and PostgreSQL (`postgres:5432`) are completely bound to the private internal Docker bridge network (`ecommerce-backend-net`). Neither port is published to the public host interface.
+- **Proxy Headers**: Nginx sets essential forwarding headers for downstream traceability and WebSocket compatibility:
+  - `Host $host`
+  - `X-Real-IP $remote_addr`
+  - `X-Forwarded-For $proxy_add_x_forwarded_for`
+  - `X-Forwarded-Proto $scheme`
+  - `X-Forwarded-Host $host`
+  - `X-Forwarded-Port $server_port`
+- **Request Size & Timeouts**:
+  - `client_max_body_size 10M;` — Blocks oversized body uploads to prevent buffer exhaustion.
+  - `client_body_timeout 15s;` & `client_header_timeout 15s;` — Protects against Slowloris attacks.
+  - `proxy_connect_timeout 60s;` & `proxy_read_timeout 60s;` — Accommodates database query latency.
+- **Server Token Obfuscation**: `server_tokens off;` strips Nginx version identifiers from HTTP response headers and error pages.
+- **Sanitized Logging**: Access log format (`sanitized_combined`) explicitly omits sensitive HTTP headers such as `Authorization`, `x-api-key`, and request payloads to ensure zero credential leakage in server logs.
+- **Security Headers Injected**:
+  - `Strict-Transport-Security "max-age=31536000; includeSubDomains" always;`
+  - `X-Frame-Options "DENY" always;`
+  - `X-Content-Type-Options "nosniff" always;`
+  - `X-XSS-Protection "1; mode=block" always;`
+  - `Referrer-Policy "strict-origin-when-cross-origin" always;`
+  - `Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; ..."`
+
+---
+
+### 2. HTTPS Setup with Custom Domain (Let's Encrypt / Certbot)
+
+When a domain name (e.g., `api.yourdomain.com`) is pointed to the EC2 Public IP:
+
+#### Step 1: Install Certbot on the EC2 Host
+```bash
+sudo apt-get update -y
+sudo apt-get install -y certbot python3-certbot-nginx
+```
+
+#### Step 2: Request the Let's Encrypt Certificate via ACME Webroot
+```bash
+sudo certbot certonly --webroot -w /var/www/certbot \
+  -d api.yourdomain.com \
+  --email admin@yourdomain.com \
+  --agree-tos --no-eff-email
+```
+
+#### Step 3: Mount the Live Certificates in Docker Compose
+Update `docker-compose.prod.yml` to mount the Let's Encrypt directory:
+```yaml
+volumes:
+  - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  - /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem:/etc/nginx/ssl/server.crt:ro
+  - /etc/letsencrypt/live/api.yourdomain.com/privkey.pem:/etc/nginx/ssl/server.key:ro
+```
+Reload Nginx:
+```bash
+docker compose -f docker-compose.prod.yml restart nginx
+```
+
+#### Step 4: Automated Certificate Renewal
+Certbot installs a systemd timer by default. You can test and verify renewal via:
+```bash
+# Test dry run
+sudo certbot renew --dry-run
+
+# Automate Nginx reload hook upon successful renewal
+echo "0 3 * * * root certbot renew --quiet --post-hook 'docker compose -f /home/ubuntu/E-Commerce_Platform/docker-compose.prod.yml restart nginx'" | sudo tee -a /etc/crontab
+```
+
+---
+
+### 3. HTTPS Setup without Domain (Self-Signed SSL)
+
+If no custom domain is available, use the automated self-signed SSL generator:
+
+```bash
+# Generate self-signed certificate for your EC2 Public IP or localhost
+./scripts/generate-self-signed-ssl.sh "<EC2_PUBLIC_IP>"
+```
+
+The script generates:
+- `nginx/ssl/server.crt` (X.509 Certificate, 2048-bit RSA, valid for 365 days, includes IP and localhost SANs)
+- `nginx/ssl/server.key` (Private key with strict 0600 file permissions)
+
+#### ⚠️ Limitations of Self-Signed Certificates
+1. **Browser Security Warnings**: Modern browsers will display `NET::ERR_CERT_AUTHORITY_INVALID` ("Your connection is not private") because the certificate is signed by an untrusted local authority rather than an accredited public Certificate Authority (CA) like Let's Encrypt or DigiCert.
+2. **Client Verification Requirement**: API clients and testing utilities (e.g. `curl`, Postman) require passing `-k` / `--insecure` to bypass certificate authority validation.
+3. **No Revocation Checking**: Self-signed certificates cannot be verified via OCSP (Online Certificate Status Protocol) or CRLs.
+4. **Scope of Use**: Strictly intended for development, staging, internal VPC testing, and proving TLS termination in sandbox assessment environments.
+
+---
+
+### 4. HTTP & HTTPS Testing & Verification
+
+Run the unified verification suite against both protocols:
+
+```bash
+# Verify over HTTP (Tests port 80 health and HTTP-to-HTTPS redirect)
+sudo ./scripts/verify-deployment.sh "http://<EC2_PUBLIC_IP>"
+
+# Verify over HTTPS (Tests port 443 TLS handshake, security headers & APIs)
+sudo ./scripts/verify-deployment.sh "https://<EC2_PUBLIC_IP>"
+```

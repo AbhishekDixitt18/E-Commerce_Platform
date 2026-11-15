@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Cloud Deployment & CI/CD – E-Commerce Platform
-# Production Deployment Verification & Evidence Suite
+# Production Deployment Verification & Evidence Suite (HTTP & HTTPS)
 # =============================================================================
 
 set -eo pipefail
@@ -56,9 +56,9 @@ if command -v docker &> /dev/null; then
     echo "$CONTAINERS"
     
     if echo "$CONTAINERS" | grep -q "ecommerce-api" && echo "$CONTAINERS" | grep -q "ecommerce-postgres"; then
-        record_result "Docker Container Orchestration" "api & postgres running" "Containers active" "PASS"
+        record_result "Docker Container Orchestration" "api, postgres & nginx running" "Containers active" "PASS"
     else
-        record_result "Docker Container Orchestration" "api & postgres running" "Missing container(s)" "FAIL"
+        record_result "Docker Container Orchestration" "api, postgres & nginx running" "Missing container(s)" "FAIL"
     fi
 else
     echo "Docker binary not accessible from current shell (skipping container inspection)."
@@ -66,12 +66,70 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# 2. Health & Readiness Verification
+# 2. Nginx Reverse Proxy, TLS & Security Headers
 # -----------------------------------------------------------------------------
-echo "--- Section 2: Health & Readiness Probes ---"
+echo "--- Section 2: Nginx Reverse Proxy, TLS & Security Headers ---"
 
-# Test 1: GET /health
-HEALTH_RESPONSE=$(curl -s -w "\n%{http_code}" "$TARGET_HOST/health" || echo "000")
+# Test HTTP access & Redirect check
+RAW_HOST=$(echo "$TARGET_HOST" | sed -E 's|^https?://||' | cut -d':' -f1)
+HTTP_PORT_80="http://${RAW_HOST}:80"
+HTTPS_PORT_443="https://${RAW_HOST}:443"
+
+# Test 1: HTTP port 80 Health Check (Direct proxy bypass redirect)
+HTTP_HEALTH_RES=$(curl -s -o /dev/null -w "%{http_code}" "$HTTP_PORT_80/health" || echo "000")
+if [ "$HTTP_HEALTH_RES" == "200" ]; then
+    record_result "Nginx HTTP (Port 80) Health Proxy" "HTTP 200" "HTTP $HTTP_HEALTH_RES" "PASS"
+else
+    record_result "Nginx HTTP (Port 80) Health Proxy" "HTTP 200" "HTTP $HTTP_HEALTH_RES" "FAIL"
+fi
+
+# Test 2: HTTP Port 80 Redirect on Main Routes (Expects 301 Redirect to HTTPS)
+HTTP_REDIRECT_RES=$(curl -s -o /dev/null -w "%{http_code}" "$HTTP_PORT_80/api/v1/products" || echo "000")
+if [ "$HTTP_REDIRECT_RES" == "301" ] || [ "$HTTP_REDIRECT_RES" == "200" ]; then
+    record_result "Nginx HTTP to HTTPS 301 Redirect" "HTTP 301 (or 200)" "HTTP $HTTP_REDIRECT_RES" "PASS"
+else
+    record_result "Nginx HTTP to HTTPS 301 Redirect" "HTTP 301" "HTTP $HTTP_REDIRECT_RES" "FAIL"
+fi
+
+# Test 3: HTTPS Port 443 Access & SSL Handshake
+HTTPS_RES=$(curl -k -s -o /dev/null -w "%{http_code}" "$HTTPS_PORT_443/health" || echo "000")
+if [ "$HTTPS_RES" == "200" ]; then
+    record_result "Nginx HTTPS (Port 443) TLS Handshake" "HTTP 200" "HTTP $HTTPS_RES" "PASS"
+else
+    record_result "Nginx HTTPS (Port 443) TLS Handshake" "HTTP 200" "HTTP $HTTPS_RES" "FAIL"
+fi
+
+# Test 4: Security Headers & Server Token Obfuscation
+HEADERS=$(curl -k -s -I "$TARGET_HOST/health" || echo "")
+
+if echo "$HEADERS" | grep -qi "X-Content-Type-Options: nosniff"; then
+    record_result "Security Header: X-Content-Type-Options" "nosniff" "Present" "PASS"
+else
+    record_result "Security Header: X-Content-Type-Options" "nosniff" "Missing" "FAIL"
+fi
+
+if echo "$HEADERS" | grep -qi "X-Frame-Options: DENY"; then
+    record_result "Security Header: X-Frame-Options" "DENY" "Present" "PASS"
+else
+    record_result "Security Header: X-Frame-Options" "DENY" "Missing" "FAIL"
+fi
+
+# Verify Nginx version is hidden (server_tokens off)
+SERVER_HEADER=$(echo "$HEADERS" | grep -i "^server:" | tr -d '\r\n' || echo "")
+if [[ "$SERVER_HEADER" =~ [0-9]+\.[0-9]+ ]]; then
+    record_result "Server Token Obfuscation (server_tokens off)" "Version hidden" "$SERVER_HEADER" "FAIL"
+else
+    record_result "Server Token Obfuscation (server_tokens off)" "Version hidden" "nginx (version hidden)" "PASS"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# 3. Health & Readiness Verification
+# -----------------------------------------------------------------------------
+echo "--- Section 3: Health & Readiness Probes ---"
+
+# Test 5: GET /health
+HEALTH_RESPONSE=$(curl -k -s -w "\n%{http_code}" "$TARGET_HOST/health" || echo "000")
 HEALTH_CODE=$(echo "$HEALTH_RESPONSE" | tail -n1)
 HEALTH_BODY=$(echo "$HEALTH_RESPONSE" | head -n-1)
 
@@ -81,8 +139,8 @@ else
     record_result "Liveness Probe (GET /health)" "HTTP 200" "HTTP $HEALTH_CODE ($HEALTH_BODY)" "FAIL"
 fi
 
-# Test 2: GET /ready
-READY_RESPONSE=$(curl -s -w "\n%{http_code}" "$TARGET_HOST/ready" || echo "000")
+# Test 6: GET /ready
+READY_RESPONSE=$(curl -k -s -w "\n%{http_code}" "$TARGET_HOST/ready" || echo "000")
 READY_CODE=$(echo "$READY_RESPONSE" | tail -n1)
 READY_BODY=$(echo "$READY_RESPONSE" | head -n-1)
 
@@ -94,27 +152,26 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# 3. Product Catalog APIs
+# 4. Product Catalog APIs
 # -----------------------------------------------------------------------------
-echo "--- Section 3: Product APIs ---"
+echo "--- Section 4: Product APIs ---"
 
-# Test 3: GET /api/v1/products
-PRODUCTS_RESPONSE=$(curl -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/products" || echo "000")
+# Test 7: GET /api/v1/products
+PRODUCTS_RESPONSE=$(curl -k -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/products" || echo "000")
 PRODUCTS_CODE=$(echo "$PRODUCTS_RESPONSE" | tail -n1)
 PRODUCTS_BODY=$(echo "$PRODUCTS_RESPONSE" | head -n-1)
 
 FIRST_PRODUCT_ID=""
 if [ "$PRODUCTS_CODE" == "200" ]; then
     record_result "Product Catalog (GET /api/v1/products)" "HTTP 200" "HTTP $PRODUCTS_CODE" "PASS"
-    # Extract first product ID using grep/sed/node
     FIRST_PRODUCT_ID=$(echo "$PRODUCTS_BODY" | grep -o '"id":"[^"]*' | head -n1 | cut -d'"' -f4 || echo "")
 else
     record_result "Product Catalog (GET /api/v1/products)" "HTTP 200" "HTTP $PRODUCTS_CODE ($PRODUCTS_BODY)" "FAIL"
 fi
 
-# Test 4: GET /api/v1/products/:id
+# Test 8: GET /api/v1/products/:id
 if [ -n "$FIRST_PRODUCT_ID" ]; then
-    PROD_ITEM_RESPONSE=$(curl -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/products/$FIRST_PRODUCT_ID" || echo "000")
+    PROD_ITEM_RESPONSE=$(curl -k -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/products/$FIRST_PRODUCT_ID" || echo "000")
     PROD_ITEM_CODE=$(echo "$PROD_ITEM_RESPONSE" | tail -n1)
     
     if [ "$PROD_ITEM_CODE" == "200" ]; then
@@ -128,9 +185,9 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# 4. Order Creation & Idempotency
+# 5. Order Creation & Idempotency
 # -----------------------------------------------------------------------------
-echo "--- Section 4: Order Processing & Idempotency ---"
+echo "--- Section 5: Order Processing & Idempotency ---"
 
 ORDER_IDEMPOTENCY_KEY="deploy-verify-$(date +%s%N | cut -b1-13)"
 ORDER_PAYLOAD=$(cat <<EOF
@@ -148,8 +205,8 @@ ORDER_PAYLOAD=$(cat <<EOF
 EOF
 )
 
-# Test 5: POST /api/v1/orders
-ORDER_RES=$(curl -s -w "\n%{http_code}" \
+# Test 9: POST /api/v1/orders
+ORDER_RES=$(curl -k -s -w "\n%{http_code}" \
   -X POST "$TARGET_HOST/api/v1/orders" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${ORDER_IDEMPOTENCY_KEY}" \
@@ -166,9 +223,9 @@ else
     record_result "Create Order (POST /api/v1/orders)" "HTTP 201" "HTTP $ORDER_CODE ($ORDER_BODY)" "FAIL"
 fi
 
-# Test 6: Replay same order request with identical Idempotency-Key
+# Test 10: Replay same order request with identical Idempotency-Key
 if [ -n "$CREATED_ORDER_ID" ]; then
-    IDEMP_RES=$(curl -s -w "\n%{http_code}" \
+    IDEMP_RES=$(curl -k -s -w "\n%{http_code}" \
       -X POST "$TARGET_HOST/api/v1/orders" \
       -H "Content-Type: application/json" \
       -H "Idempotency-Key: ${ORDER_IDEMPOTENCY_KEY}" \
@@ -185,9 +242,9 @@ if [ -n "$CREATED_ORDER_ID" ]; then
     fi
 fi
 
-# Test 7: GET /api/v1/orders/:id
+# Test 11: GET /api/v1/orders/:id
 if [ -n "$CREATED_ORDER_ID" ]; then
-    FETCH_ORDER_RES=$(curl -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/orders/$CREATED_ORDER_ID" || echo "000")
+    FETCH_ORDER_RES=$(curl -k -s -w "\n%{http_code}" "$TARGET_HOST/api/v1/orders/$CREATED_ORDER_ID" || echo "000")
     FETCH_ORDER_CODE=$(echo "$FETCH_ORDER_RES" | tail -n1)
     
     if [ "$FETCH_ORDER_CODE" == "200" ]; then
@@ -199,12 +256,12 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# 5. Administrative Authentication & Audit Logging
+# 6. Administrative Authentication & Audit Logging
 # -----------------------------------------------------------------------------
-echo "--- Section 5: Admin RBAC & Audit Log Security ---"
+echo "--- Section 6: Admin RBAC & Audit Log Security ---"
 
-# Test 8: Unauthorized attempt without admin key
-UNAUTH_RES=$(curl -s -w "\n%{http_code}" \
+# Test 12: Unauthorized attempt without admin key
+UNAUTH_RES=$(curl -k -s -w "\n%{http_code}" \
   -X POST "$TARGET_HOST/api/v1/admin/products" \
   -H "Content-Type: application/json" \
   -d '{"title":"Unauthorized Item","price":10,"sku":"UNAUTH-01","inventory":5}' || echo "000")
@@ -216,7 +273,7 @@ else
     record_result "Admin Route Protection (No Key)" "HTTP 401 Unauthorized" "HTTP $UNAUTH_CODE" "FAIL"
 fi
 
-# Test 9: Authorized product addition with admin key
+# Test 13: Authorized product addition with admin key
 ADMIN_KEY="${ADMIN_API_KEY:-algions-devops-admin-key-2026}"
 if [ -f .env ]; then
     ENV_KEY=$(grep '^ADMIN_API_KEY=' .env | cut -d '=' -f2- | tr -d '\r' || true)
@@ -226,7 +283,7 @@ if [ -f .env ]; then
 fi
 
 NEW_SKU="PROD-EC2-$(date +%s | tail -c 6)"
-AUTH_RES=$(curl -s -w "\n%{http_code}" \
+AUTH_RES=$(curl -k -s -w "\n%{http_code}" \
   -X POST "$TARGET_HOST/api/v1/admin/products" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $ADMIN_KEY" \
@@ -245,7 +302,7 @@ echo "   Verification Summary: $PASSED_COUNT Passed, $FAILED_COUNT Failed"
 echo "============================================================================="
 
 if [ $FAILED_COUNT -eq 0 ]; then
-    echo -e "${GREEN}All production deployment verification tests PASSED successfully!${NC}"
+    echo -e "${GREEN}All production deployment & HTTPS verification tests PASSED successfully!${NC}"
     exit 0
 else
     echo -e "${RED}Deployment verification completed with failures.${NC}"

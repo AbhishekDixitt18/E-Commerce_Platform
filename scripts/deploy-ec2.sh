@@ -135,7 +135,18 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 5. Build & Launch Containers via Docker Compose
+# 5. SSL/TLS Certificate Provisioning
+# -----------------------------------------------------------------------------
+if [ ! -f nginx/ssl/server.crt ] || [ ! -f nginx/ssl/server.key ]; then
+    log_info "No TLS certificates detected in nginx/ssl/. Generating local self-signed certificate..."
+    chmod +x scripts/generate-self-signed-ssl.sh
+    ./scripts/generate-self-signed-ssl.sh "127.0.0.1"
+else
+    log_info "TLS certificates verified in nginx/ssl/."
+fi
+
+# -----------------------------------------------------------------------------
+# 6. Build & Launch Containers via Docker Compose
 # -----------------------------------------------------------------------------
 log_info "Deploying production stack via docker-compose.prod.yml..."
 
@@ -149,7 +160,7 @@ $DOCKER_CMD compose -f docker-compose.prod.yml down --remove-orphans || true
 $DOCKER_CMD compose -f docker-compose.prod.yml up -d --build
 
 # -----------------------------------------------------------------------------
-# 6. Wait for Health Checks to Pass
+# 7. Wait for Health Checks to Pass
 # -----------------------------------------------------------------------------
 log_info "Waiting for containers to report healthy state..."
 
@@ -179,21 +190,23 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 7. Run Deployment Verification
+# 8. Run Deployment Verification
 # -----------------------------------------------------------------------------
 if [ -f scripts/verify-deployment.sh ]; then
     chmod +x scripts/verify-deployment.sh
     log_info "Running automated post-deployment verification suite..."
-    bash scripts/verify-deployment.sh "http://127.0.0.1"
+    sudo bash scripts/verify-deployment.sh "http://127.0.0.1"
 fi
 
 PUBLIC_IP=$(curl -s -m 3 https://checkip.amazonaws.com || curl -s -m 3 https://ifconfig.me || echo "YOUR_EC2_PUBLIC_IP")
 
 echo ""
 echo "============================================================================="
-log_success "E-Commerce Platform successfully deployed on AWS EC2!"
-echo "API Endpoint:  http://${PUBLIC_IP}/"
-echo "Health Probe:  http://${PUBLIC_IP}/health"
-echo "Readiness:     http://${PUBLIC_IP}/ready"
-echo "Products API:  http://${PUBLIC_IP}/api/v1/products"
+log_success "E-Commerce Platform successfully deployed on AWS EC2 with TLS/HTTPS!"
+echo "HTTP Endpoint:   http://${PUBLIC_IP}/ (Redirects to HTTPS)"
+echo "HTTPS Endpoint:  https://${PUBLIC_IP}/"
+echo "Health Probe:    https://${PUBLIC_IP}/health"
+echo "Readiness Probe: https://${PUBLIC_IP}/ready"
+echo "Products API:    https://${PUBLIC_IP}/api/v1/products"
+echo "Orders API:      https://${PUBLIC_IP}/api/v1/orders"
 echo "============================================================================="
