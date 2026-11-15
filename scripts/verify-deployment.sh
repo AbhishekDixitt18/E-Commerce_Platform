@@ -45,8 +45,13 @@ echo ""
 # 1. Check Running Docker Containers
 # -----------------------------------------------------------------------------
 echo "--- Section 1: Docker Containers & Infrastructure ---"
+DOCKER_CMD="docker"
+if ! docker ps &> /dev/null; then
+    DOCKER_CMD="sudo docker"
+fi
+
 if command -v docker &> /dev/null; then
-    CONTAINERS=$(docker ps --format "{{.Names}} ({{.Status}})")
+    CONTAINERS=$($DOCKER_CMD ps --format "{{.Names}} ({{.Status}})" 2>/dev/null || echo "")
     echo "Running Containers:"
     echo "$CONTAINERS"
     
