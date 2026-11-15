@@ -341,7 +341,7 @@ jobs:
       - name: Check EC2 Deployment Credentials
         id: ec2_secrets
         env:
-          EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY || secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           if [ -n "$EC2_KEY" ] && [ -n "$EC2_HOST" ]; then
@@ -349,7 +349,7 @@ jobs:
             echo "EC2 SSH deployment credentials configured."
           else
             echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::notice ::EC2 SSH deployment secrets (EC2_SSH_KEY, EC2_HOST) not configured in GitHub Secrets. Direct SSH deployment skipped; can be deployed via EC2 Instance Connect."
+            echo "::notice ::EC2 SSH deployment secrets (EC2_SSH_PRIVATE_KEY / EC2_SSH_KEY, EC2_HOST) not configured in GitHub Secrets. Direct SSH deployment skipped; can be deployed via EC2 Instance Connect."
           fi
 
       - name: Deploy to AWS EC2 via SSH with Rollback Guard
@@ -358,7 +358,7 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER || 'ubuntu' }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY || secrets.EC2_SSH_KEY }}
           port: 22
           script: |
             set -e
@@ -392,25 +392,35 @@ jobs:
             else
               echo "Building application container locally from multi-stage Dockerfile..."
               sudo docker compose -f docker-compose.prod.yml build app
+              export APP_IMAGE="abhishekdixitt18/ecommerce-cloud-devops:latest"
             fi
 
-            # 4. Safely update application and reverse proxy (preserves postgres-prod-data volume)
+            # 4. Synchronize compiled React frontend assets to volume & host
+            echo "Synchronizing React frontend production assets..."
+            sudo docker compose -f docker-compose.prod.yml run --rm frontend-sync || true
+            sudo docker create --name temp-sync-assets "$APP_IMAGE" 2>/dev/null || true
+            sudo docker cp temp-sync-assets:/usr/src/app/frontend/dist/. ./frontend/dist/ 2>/dev/null || true
+            sudo docker rm -f temp-sync-assets 2>/dev/null || true
+
+            # 5. Safely update application and reverse proxy (preserves postgres-prod-data volume)
             sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans app nginx
 
-            # 5. Immediate internal health verification with retry loop
+            # 6. Immediate internal health & frontend verification with retry loop
             echo "Performing local deployment health checks..."
             HEALTH_PASSED=false
             for i in {1..12}; do
-              if curl -sf http://127.0.0.1/health > /dev/null && curl -sf http://127.0.0.1/health/ready > /dev/null; then
-                echo "Health verification succeeded on attempt $i!"
+              if curl -sf http://127.0.0.1/health > /dev/null && \
+                 curl -sf http://127.0.0.1/health/ready > /dev/null && \
+                 curl -s http://127.0.0.1/ | grep -q '<div id="root">'; then
+                echo "Health & React Dashboard verification succeeded on attempt $i!"
                 HEALTH_PASSED=true
                 break
               fi
-              echo "Waiting for application to become healthy (attempt $i/12)..."
+              echo "Waiting for services and frontend to become healthy (attempt $i/12)..."
               sleep 5
             done
 
-            # 6. Automatic Rollback on failure
+            # 7. Automatic Rollback on failure
             if [ "$HEALTH_PASSED" != "true" ]; then
               echo "::error ::Deployment health verification failed! Triggering automatic rollback..."
               if [ -n "$PREV_IMAGE" ]; then
@@ -418,10 +428,12 @@ jobs:
                 sudo docker tag "$PREV_IMAGE" "${IMAGE_REPO}:rollback-active"
                 export APP_IMAGE="${IMAGE_REPO}:rollback-active"
                 sudo docker compose -f docker-compose.prod.yml up -d app
+                sudo docker compose -f docker-compose.prod.yml restart nginx
               else
                 echo "Reverting commit and rebuilding previous working release..."
                 git checkout HEAD~1
                 sudo docker compose -f docker-compose.prod.yml up -d --build app
+                sudo docker compose -f docker-compose.prod.yml restart nginx
               fi
               echo "Rollback completed. Exiting with failure."
               exit 1
@@ -463,7 +475,8 @@ jobs:
           if echo "$ROOT_HTML" | grep -q '<div id="root">'; then
             echo "SUCCESS: React Dashboard HTML verified (<div id=\"root\"> detected)."
           else
-            echo "::warning ::React root container not detected on http://${EC2_HOST}/. Verify Nginx volume mount."
+            echo "::error ::React root container not detected on http://${EC2_HOST}/! Failing verification."
+            exit 1
           fi
 
           # Verify Database Readiness

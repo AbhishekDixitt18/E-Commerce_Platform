@@ -63,6 +63,20 @@ services:
       - ecommerce-backend-net
 
   # =============================================================================
+  # Frontend Asset Sync (Extracts Vite Production Bundle to Named Volume for Nginx)
+  # =============================================================================
+  frontend-sync:
+    image: ${APP_IMAGE:-abhishekdixitt18/ecommerce-cloud-devops:latest}
+    container_name: ecommerce-frontend-sync
+    restart: "no"
+    user: root
+    command: sh -c "mkdir -p /var/www/html && cp -rf /usr/src/app/frontend/dist/. /var/www/html/"
+    volumes:
+      - frontend-assets:/var/www/html
+    networks:
+      - ecommerce-backend-net
+
+  # =============================================================================
   # Nginx Reverse Proxy & TLS (Public Entrypoint: Port 80 & 443, Rate Limiting & SSL)
   # =============================================================================
   nginx:
@@ -75,8 +89,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./frontend/dist:/var/www/html:ro
+      - frontend-assets:/var/www/html:ro
     depends_on:
+      frontend-sync:
+        condition: service_completed_successfully
       app:
         condition: service_healthy
     healthcheck:
@@ -114,6 +130,8 @@ volumes:
   postgres-prod-data:
     driver: local
   prometheus-prod-data:
+    driver: local
+  frontend-assets:
     driver: local
 
 networks:
