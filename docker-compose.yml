@@ -1,6 +1,6 @@
 services:
   # =============================================================================
-  # PostgreSQL Database Service 
+  # PostgreSQL Database Service (Internal Network Only - No Public Port Exposure)
   # =============================================================================
   postgres:
     image: postgres:16-alpine
