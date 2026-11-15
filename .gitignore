@@ -14,6 +14,8 @@ yarn.lock
 *.key
 *.cert
 *.crt
+!nginx/ssl/server.crt
+!nginx/ssl/server.key
 id_rsa
 id_rsa.pub
 secrets/
