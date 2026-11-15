@@ -54,12 +54,16 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
   // Log non-operational (server bugs) or 500s with stack trace
   if (!error.isOperational || error.statusCode >= 500) {
     logger.error(`[${req.method}] ${req.originalUrl} - ${error.message}`, {
+      method: req.method,
+      route: req.originalUrl,
       statusCode: error.statusCode,
       stack: error.stack,
       ip: req.ip,
     });
   } else {
     logger.warn(`[${req.method}] ${req.originalUrl} - ${error.message}`, {
+      method: req.method,
+      route: req.originalUrl,
       statusCode: error.statusCode,
       errors: error.errors,
     });

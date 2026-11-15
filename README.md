@@ -451,3 +451,114 @@ sudo ./scripts/verify-deployment.sh "http://<EC2_PUBLIC_IP>"
 # Verify over HTTPS (Tests port 443 TLS handshake, security headers & APIs)
 sudo ./scripts/verify-deployment.sh "https://<EC2_PUBLIC_IP>"
 ```
+
+---
+
+## 📊 Site Reliability Engineering (SRE): Observability & Metrics
+
+The E-Commerce platform includes an end-to-end observability stack with structured JSON logging, deep health monitoring, Prometheus metric instrumentation, and automated failure testing.
+
+### 1. Structured JSON Logging
+- **Standard Format:** Every incoming request and system event generates a structured JSON log entry containing:
+  - `timestamp`: ISO 8601 UTC timestamp
+  - `level`: Log level (`INFO`, `WARN`, `ERROR`, `DEBUG`)
+  - `method`: HTTP request method (`GET`, `POST`, etc.)
+  - `route`: Normalized request route (`/api/v1/products/:id`)
+  - `statusCode`: HTTP response status code
+  - `durationMs`: Request latency in milliseconds
+  - `ip`: Client remote IP address
+  - `userAgent`: Client user agent string
+- **Sensitive Data Redaction:** Passwords, API keys, JWT tokens, credit card numbers, and authorization headers are recursively sanitized (`[REDACTED]`) before logging.
+
+### 2. Health & Readiness Probes
+- **Liveness Probe (`GET /health`):** Fast application process status, uptime, node version, and system memory. Used by Docker `HEALTHCHECK` and AWS ALB.
+- **Readiness Probe (`GET /ready` or `GET /health/ready`):** Deep dependency check verifying PostgreSQL connectivity and connection pool status (total, idle, waiting). Returns HTTP 200 `UP` or HTTP 503 `DEGRADED`.
+- **Docker Health Checks:** Configured in `docker-compose.yml` and `docker-compose.prod.yml` with automated retry, backoff, and dependency ordering (`condition: service_healthy`).
+
+### 3. Prometheus Metrics (`/metrics`)
+The application exposes Prometheus-compatible metrics at `/metrics`:
+- `http_requests_total`: Counter tracking total processed requests with labels `method`, `route`, and `status_code`.
+- `http_request_duration_seconds`: Histogram tracking request latencies with buckets from 5ms to 10s.
+- `app_uptime_seconds`: Gauge reporting continuous process uptime.
+- `db_pool_total_connections`, `db_pool_idle_connections`, `db_pool_waiting_clients`: Real-time PostgreSQL pool health gauges.
+- `nodejs_*`: Complete Node.js runtime metrics (CPU, memory, event loop lag, GC pauses).
+
+### 4. Prometheus Scraper Configuration (`prometheus/prometheus.yml`)
+Prometheus scrapes the API container every 5 seconds on internal port `3000`:
+- **Prometheus UI:** Accessible on port `9090` (e.g., `http://<EC2_PUBLIC_IP>:9090`).
+- **Scrape Targets:** `app:3000` (service: `ecommerce-api`).
+
+---
+
+## 🛠 SRE Troubleshooting Guide
+
+Common operations for diagnosing, managing, and maintaining the production deployment:
+
+### 1. Check Application Logs (Real-time Structured Logs)
+```bash
+# Production Docker Compose logs
+docker compose -f docker-compose.prod.yml logs -f app
+
+# Filter only ERROR logs
+docker compose -f docker-compose.prod.yml logs app | grep '"level":"ERROR"'
+```
+
+### 2. Check Database Logs
+```bash
+# View PostgreSQL container logs
+docker compose -f docker-compose.prod.yml logs -f postgres
+
+# Inspect recent database connections and queries
+docker compose -f docker-compose.prod.yml logs --tail=100 postgres
+```
+
+### 3. Check Container Status & Health
+```bash
+# List all running containers with health status
+docker compose -f docker-compose.prod.yml ps
+
+# Inspect detailed health status of the application container
+docker inspect --format='{{json .State.Health}}' ecommerce-api-prod | jq .
+```
+
+### 4. Check Application Health & Metrics
+```bash
+# Fast Liveness Probe
+curl -i http://127.0.0.1/health
+
+# Deep Database Readiness Probe
+curl -i http://127.0.0.1/ready
+
+# Prometheus Metrics Scrape
+curl -s http://127.0.0.1/metrics | head -n 30
+```
+
+### 5. Restart Failed Services
+```bash
+# Restart the API backend service
+docker compose -f docker-compose.prod.yml restart app
+
+# Restart the entire stack cleanly
+docker compose -f docker-compose.prod.yml restart
+
+# Rebuild and recreate a failed container
+docker compose -f docker-compose.prod.yml up -d --force-recreate app
+```
+
+---
+
+## 🧪 Controlled Application Failure & Recovery Test
+
+Demonstrates a controlled outage and automated recovery verification:
+
+```bash
+# Run the automated SRE Failure and Recovery Suite
+sudo ./scripts/failure-test.sh "http://127.0.0.1"
+```
+
+The script executes 5 phases:
+1. **Phase 1 (Baseline):** Verifies `/health`, `/ready`, and `/metrics` return HTTP 200.
+2. **Phase 2 (Controlled Outage):** Gracefully stops the `ecommerce-api-prod` container.
+3. **Phase 3 (Outage Verification):** Verifies incoming requests fail with HTTP 502 Bad Gateway through Nginx.
+4. **Phase 4 (Recovery):** Restarts the container and polls container health status until healthy.
+5. **Phase 5 (Post-Recovery Verification):** Confirms end-to-end recovery of health probes, database connection pool, and Prometheus metrics.

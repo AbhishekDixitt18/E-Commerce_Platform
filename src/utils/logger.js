@@ -1,6 +1,6 @@
 /**
  * Application Logger Utility
- * Provides structured log outputs with log level filtering and timestamping.
+ * Emits structured JSON logs with log level filtering, timestamping, and sensitive data protection.
  */
 
 const LOG_LEVELS = {
@@ -13,18 +13,47 @@ const LOG_LEVELS = {
 const currentLevel = (process.env.LOG_LEVEL || 'info').toLowerCase();
 const currentPriority = LOG_LEVELS[currentLevel] !== undefined ? LOG_LEVELS[currentLevel] : LOG_LEVELS.info;
 
+// Sensitive keys regex pattern to prevent logging passwords, API keys or sensitive data
+const SENSITIVE_KEY_REGEX = /password|token|secret|authorization|api[_-]?key|credit[_-]?card|cvv|ssn/i;
+
+function sanitize(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 5) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sanitize(item, depth + 1));
+  }
+  const sanitized = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (SENSITIVE_KEY_REGEX.test(key)) {
+      sanitized[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitize(value, depth + 1);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 function formatMessage(level, message, meta) {
   const timestamp = new Date().toISOString();
-  if (process.env.NODE_ENV === 'production') {
-    return JSON.stringify({
+  const isJsonFormat = process.env.LOG_FORMAT === 'json' || process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+
+  if (isJsonFormat) {
+    const entry = {
       timestamp,
       level: level.toUpperCase(),
       message,
-      ...(meta && Object.keys(meta).length ? { meta } : {}),
-    });
+    };
+    if (meta && typeof meta === 'object') {
+      const sanitizedMeta = sanitize(meta);
+      Object.assign(entry, sanitizedMeta);
+    }
+    return JSON.stringify(entry);
   }
 
-  const metaString = meta && Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+  const metaString = meta && Object.keys(meta).length ? ` ${JSON.stringify(sanitize(meta))}` : '';
   return `[${timestamp}] [${level.toUpperCase()}] ${message}${metaString}`;
 }
 

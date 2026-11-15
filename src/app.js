@@ -6,9 +6,10 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
 
 const config = require('./config/env');
+const { requestLogger } = require('./middleware/requestLogger');
+const { register } = require('./utils/metrics');
 const apiRoutes = require('./routes');
 const healthRoutes = require('./routes/health.routes');
 const healthController = require('./controllers/health.controller');
@@ -30,16 +31,22 @@ app.use(cors({ origin: config.server.corsOrigin }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// HTTP Request logging
-if (config.isDevelopment) {
-  app.use(morgan('dev'));
-} else if (config.isProduction) {
-  app.use(morgan('combined'));
-}
+// Structured JSON Request Logging & Prometheus Metrics Collection
+app.use(requestLogger);
 
 // Top-level health endpoints (for Docker HEALTHCHECK, AWS ALB, Kubernetes probes)
 app.use('/health', healthRoutes);
 app.get('/ready', (req, res, next) => healthController.getReadiness(req, res, next));
+
+// Prometheus Metrics Scrape Endpoint
+app.get('/metrics', async (req, res, next) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Direct API route aliases (/api/products, /api/orders, /api/admin)
 app.use('/api/products', productRoutes);

@@ -65,8 +65,33 @@ services:
     networks:
       - ecommerce-network
 
+  # =============================================================================
+  # Prometheus Observability Service (Application & Infrastructure Metrics)
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: ecommerce-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
 volumes:
   postgres-data:
+    driver: local
+  prometheus-data:
     driver: local
 
 networks:

@@ -1,0 +1,31 @@
+# =============================================================================
+# Prometheus Monitoring Configuration
+# E-Commerce Cloud DevOps Platform
+# =============================================================================
+
+global:
+  scrape_interval: 15s      # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate alerting and recording rules every 15 seconds
+  scrape_timeout: 10s       # Timeout per scrape
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Scrape Prometheus itself
+  # ---------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ---------------------------------------------------------------------------
+  # Scrape E-Commerce Express Backend API
+  # Scrapes /metrics on container host 'app:3000'
+  # ---------------------------------------------------------------------------
+  - job_name: 'ecommerce-api'
+    metrics_path: '/metrics'
+    scrape_interval: 5s     # Fast interval for real-time observability
+    static_configs:
+      - targets: ['app:3000']
+        labels:
+          environment: 'production'
+          service: 'ecommerce-api'
+          app: 'ecommerce-cloud-devops'
