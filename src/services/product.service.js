@@ -3,7 +3,7 @@
  * Business logic for product retrieval, search, creation, and stock updates.
  */
 
-const { pool, query, getClient } = require('../config/database');
+const { query, getClient } = require('../config/database');
 const ApiError = require('../utils/apiError');
 const logger = require('../utils/logger');
 
